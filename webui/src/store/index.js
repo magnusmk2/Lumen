@@ -191,7 +191,7 @@ export async function loadConfig() {
 }
 
 export async function saveSettings(patch) {
-  await api()?.save_settings(patch)
+  return (await api()?.save_settings(patch)) ?? { error: 'no_api' }
 }
 
 export async function setBridgeIp(ip) {
@@ -253,29 +253,23 @@ export async function syncPreview() {
 }
 
 
-export async function initSync() {
-  if (store.sync.initialized) return
-  store.sync.initialized = true
-
+export async function initSync(force = false) {
+  if (store.sync.initialized && !force) return
   const cfgs = await listEntertainmentConfigs()
-  if (cfgs.data?.length) {
-    store.sync.areas = cfgs.data
-    const saved = await loadConfig()
-    store.sync.configId = saved.sync_area_id || cfgs.data[0].id
-    store.sync.channels = await getChannelNames(store.sync.configId)
-  }
-  store.sync.outputs = await listOutputs()
-
+  if (cfgs.error) throw new Error(cfgs.error)
   const cfg = await loadConfig()
-  store.sync.output = cfg.sync_output || store.sync.outputs[0] || ''
-  store.sync.saturation = cfg.sync_saturation ?? 1.6
-  store.sync.fps = cfg.sync_fps ?? 30
-
   const status = await syncStatus()
+  store.sync.areas = cfgs.data || []
+  store.sync.configId = status.running && status.area ? status.area : (cfg.sync_area_id || store.sync.areas[0]?.id || null)
+  store.sync.channels = store.sync.configId ? await getChannelNames(store.sync.configId) : []
+  store.sync.outputs = await listOutputs()
+  store.sync.output = status.running && status.output ? status.output : (cfg.sync_output || store.sync.outputs[0] || '')
+  store.sync.saturation = cfg.sync_saturation ?? 1.6
+  store.sync.fps = status.running ? status.fps : (cfg.sync_fps ?? 30)
   store.sync.running = status.running
-  store.sync.state = status.state || "idle"
+  store.sync.state = status.state || 'idle'
   store.sync.error = status.error
-  if (status.running) store.sync.fps = status.fps
+  store.sync.initialized = true
 }
 
 export async function startSync() {
@@ -291,10 +285,11 @@ export async function stopSync() {
   return res
 }
 
-export function setSyncOutput(output) {
-  store.sync.output = output
-  saveSettings({ sync_output: output })
-  if (store.sync.running) api()?.set_sync_output(output)
+export async function setSyncOutput(output) {
+  if (store.sync.running) return { error: 'Stop sync before changing monitor' }
+  const res = await saveSettings({ sync_output: output })
+  if (!res.error) store.sync.output = output
+  return res
 }
 
 export function setSyncSaturation(saturation) {
@@ -333,7 +328,12 @@ export async function refreshSyncStatus() {
   return status
 }
 export async function chooseSyncArea(id) {
-  store.sync.configId = id
-  store.sync.channels = await getChannelNames(id)
-  await saveSettings({ sync_area_id: id })
+  if (store.sync.running) return { error: 'Stop sync before changing area' }
+  const channels = await getChannelNames(id)
+  const res = await saveSettings({ sync_area_id: id })
+  if (!res.error) {
+    store.sync.configId = id
+    store.sync.channels = channels
+  }
+  return res
 }

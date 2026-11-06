@@ -24,7 +24,7 @@ const FPS_OPTIONS = [20, 25, 30, 40, 50]
 const PLACEHOLDER = 'var(--inset)'
 
 const errorMsg = ref('')
-const mappingData = ref(null), editor = ref(false), loading = ref(false)
+const mappingData = ref(null), editor = ref(false), loading = ref(false), fpsBusy = ref(false), toggleBusy = ref(false)
 const canStart = computed(() => !!mappingData.value && !mappingData.value.problem && !loading.value && store.sync.outputs.includes(store.sync.output) && store.sync.areas.some(a=>a.id===store.sync.configId))
 const sortedChannels = computed(() => mappingData.value?.topology.channels || [])
 const previewColors = ref([])
@@ -67,18 +67,35 @@ async function poll() {
   finally { statusBusy = false }
 }
 async function onToggle() {
+  if (toggleBusy.value) return
+  toggleBusy.value = true
   errorMsg.value = ''
-  const res = store.sync.running ? await stopSync() : await startSync()
-  if (res.error) errorMsg.value = res.error
-  await poll()
+  try {
+    const res = store.sync.running ? await stopSync() : await startSync()
+    if (res.error) errorMsg.value = res.error
+    await poll()
+  } catch (e) { errorMsg.value = String(e) }
+  finally { toggleBusy.value = false }
+}
+async function changeContext(change) {
+  if (loading.value) return
+  loading.value = true
+  try {
+    const result = await change()
+    if (result?.error) errorMsg.value = result.error
+    else await loadMapping()
+  } catch (e) { errorMsg.value = String(e) }
+  finally { loading.value = false }
 }
 async function onOutputChange(e) {
-  setSyncOutput(e.target.value)
-  await loadMapping()
+  await changeContext(() => setSyncOutput(e.target.value))
 }
 async function onAreaChange(e) {
-  await chooseSyncArea(e.target.value)
-  await loadMapping()
+  await changeContext(() => chooseSyncArea(e.target.value))
+}
+async function reloadContext() {
+  await changeContext(async () => { await initSync(true) })
+  if (!previewTimer && alive) previewTimer = setInterval(poll, 250)
 }
 async function saved() { editor.value = false; await loadMapping() }
 
@@ -87,8 +104,13 @@ function commitBoost(pct) {
 }
 
 async function setFps(n) {
-  const res = await setSyncFps(n)
-  if (res.error) errorMsg.value = res.error
+  if (fpsBusy.value) return
+  fpsBusy.value = true
+  try {
+    const res = await setSyncFps(n)
+    if (res.error) errorMsg.value = res.error
+  } catch (e) { errorMsg.value = String(e) }
+  finally { fpsBusy.value = false }
 }
 </script>
 
@@ -96,9 +118,9 @@ async function setFps(n) {
   <div class="sync-page">
     <div class="card">
       <label class="context-label">{{ t('map_area') }}
-        <select :value="store.sync.configId" :disabled="store.sync.running || loading" @change="onAreaChange"><option v-if="!store.sync.areas.some(a=>a.id===store.sync.configId)" :value="store.sync.configId" disabled>{{ t('map_unavailable') }}</option><option v-for="area in store.sync.areas" :key="area.id" :value="area.id">{{ area.name }}</option></select>
+        <select :value="store.sync.configId" :disabled="store.sync.running || loading || fpsBusy || toggleBusy" @change="onAreaChange"><option v-if="!store.sync.areas.some(a=>a.id===store.sync.configId)" :value="store.sync.configId" disabled>{{ t('map_unavailable') }}</option><option v-for="area in store.sync.areas" :key="area.id" :value="area.id">{{ area.name }}</option></select>
       </label>
-      <div class="label-row"><span>{{ t('map_title') }}</span><button :disabled="loading" @click="loadMapping">{{ t('map_refresh') }}</button></div>
+      <div class="label-row"><span>{{ t('map_title') }}</span><button :disabled="loading" @click="reloadContext">{{ t('map_refresh') }}</button></div>
       <div v-if="mappingData" class="mapping-screen" :style="{aspectRatio:mappingData.aspect || 16/9,width:'min(100%, '+(250*(mappingData.aspect || 16/9))+'px)'}">
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" :aria-label="t('map_diagram')">
           <rect width="100" height="100" fill="var(--inset)" />
@@ -108,7 +130,7 @@ async function setFps(n) {
       <div class="channel-grid" :style="{ gridTemplateColumns: `repeat(${sortedChannels.length || 1}, minmax(0,1fr))` }">
         <div v-for="(ch,i) in sortedChannels" :key="ch.id" class="channel-cell"><div class="channel-bar" :style="{background:previewColors[i] || PLACEHOLDER}"/><div class="channel-name" :title="ch.name">{{ ch.name }} · {{ ch.id }}</div></div>
       </div>
-      <button :disabled="!mappingData || loading" @click="editor=true">{{ t('map_edit') }}</button>
+      <button :disabled="!mappingData || loading || fpsBusy || toggleBusy" @click="editor=true">{{ t('map_edit') }}</button>
       <p class="note">{{ t('map_capture_note') }}</p>
     </div>
     <MappingEditor v-if="editor && mappingData" :data="mappingData" @close="editor=false" @saved="saved" />
@@ -116,7 +138,7 @@ async function setFps(n) {
     <div class="card options">
       <div class="row">
         <span class="label">{{ t('sync_monitor') }}</span>
-        <select class="output-select" :value="store.sync.output" :disabled="store.sync.running" @change="onOutputChange">
+        <select class="output-select" :value="store.sync.output" :disabled="store.sync.running || loading || fpsBusy || toggleBusy" @change="onOutputChange">
           <option v-if="!store.sync.outputs.includes(store.sync.output)" :value="store.sync.output" disabled>{{ store.sync.output }} ({{ t('map_unavailable') }})</option>
           <option v-for="o in store.sync.outputs" :key="o" :value="o">{{ o==='portal-selection' ? t('map_portal') : o }}</option>
         </select>
@@ -144,6 +166,7 @@ async function setFps(n) {
             :key="n"
             type="button"
             class="fps-chip"
+            :disabled="fpsBusy || loading || ['starting','stopping','identifying'].includes(store.sync.state)"
             :class="{ selected: store.sync.fps === n }"
             @click="setFps(n)"
           >
@@ -153,7 +176,7 @@ async function setFps(n) {
       </div>
     </div>
 
-    <button type="button" class="primary-action" :class="{ running: store.sync.running }" :disabled="(!store.sync.running && !canStart) || store.sync.state === 'stopping'" @click="onToggle">
+    <button type="button" class="primary-action" :class="{ running: store.sync.running }" :disabled="(!store.sync.running && !canStart) || store.sync.state === 'stopping' || fpsBusy || toggleBusy" @click="onToggle">
       {{ store.sync.running ? t('sync_stop_full') : t('sync_start_full') }}
     </button>
 
