@@ -164,3 +164,11 @@ Add acceptance cases for mixed manual/automatic channels, nonuniform widths, rev
 The equal-thirds illustration remains useful as a selectable Equal widths preset, but it is no longer the sole desk-strip default. Discovery and topology validation become part of the pure mapping-engine milestone. The static UI concept predates this refinement; add the Region widths choice and device-grouped channels when implementing it.
 
 This research establishes enough structure to design a capability-driven mapper. Physical coverage, identify-test behavior and on-device performance are still unverified. No claim is made that the area supports more than its currently advertised stream channels.
+
+## REST gradient points versus screen sync
+
+A shared discussion and a JSON example were reviewed on 6 November 2026. Sending `gradient.points` to the v2 light resource is a separate control path from Entertainment streaming. This bridge reports five palette points for this strip, alongside three channels in its current Entertainment configuration. Neither palette-point capacity nor logical pixel count creates extra HueStream channel IDs.
+
+Philips explicitly states that REST v1/v2 must not be used for continuous fast light updates: it is slower than the dedicated stream, cannot be stopped from other apps, and generates unnecessary event traffic. See [Philips: New Hue API](https://developers.meethue.com/new-hue-api/). Therefore five-point REST control is useful for static gradients but is not a replacement for responsive screen sync. DIY ESP8266/addressable-strip firmware describes different controller hardware and does not unlock the existing Hue strip through a bridge setting.
+
+Claims that this strip’s three stream channels are always equal, are limited specifically for bandwidth reasons, or prove an absolute hardware maximum are not established by our observations. Continue consuming advertised channel IDs and keeping static-gradient capability separate.

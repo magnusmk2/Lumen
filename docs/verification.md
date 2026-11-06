@@ -41,3 +41,9 @@ No bridge area layout, device segmentation or additional independent channels we
 ## Live preview follow-up
 
 Restored large live channel swatches on Sync and Edit mapping, preserving channel IDs while displaying them left to right. Diagram regions follow current output colours. Production build, 38 Python tests, 7 frontend tests and 213-key translation parity pass. The installed GTK/WebKit app was observed returning different hex colours across successive samples; its editor showed matching coloured regions. Draft/applied distinction is labelled explicitly.
+
+## Button help follow-up
+
+Added shared hover/focus help for every button, with disabled-state reasons, accessible descriptions, viewport positioning and Escape dismissal. Native GTK/WebKit checks confirmed the disabled Identify explanation while syncing, keyboard focus help, and tooltip dismissal while preserving the editor. The initial automation used an incorrect label and then needed to wait for its programmatic scroll event before hovering; corrected smoke checks pass. No pointer movement was used.
+
+38 Python tests and 10 frontend tests pass, including button coverage and disabled hit-test modal isolation. Production build, compilation, 266-key English/French parity and runtime dependency audit pass. The REST gradient example was researched separately; Philips guidance rules out continuous fast REST updates as a screen-sync replacement.

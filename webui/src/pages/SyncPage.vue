@@ -122,7 +122,7 @@ async function setFps(n) {
       <label class="context-label">{{ t('map_area') }}
         <select :value="store.sync.configId" :disabled="store.sync.running || loading || fpsBusy || toggleBusy" @change="onAreaChange"><option v-if="!store.sync.areas.some(a=>a.id===store.sync.configId)" :value="store.sync.configId" disabled>{{ t('map_unavailable') }}</option><option v-for="area in store.sync.areas" :key="area.id" :value="area.id">{{ area.name }}</option></select>
       </label>
-      <div class="label-row"><span>{{ t('map_title') }}</span><button :disabled="loading" @click="reloadContext">{{ t('map_refresh') }}</button></div>
+      <div class="label-row"><span>{{ t('map_title') }}</span><button v-help="{ action: t('help_topology'), reason: loading || fpsBusy || toggleBusy ? t('help_busy') : !mappingData ? t('help_no_mapping') : mappingData.problem || t('help_display_missing') }" :disabled="loading" @click="reloadContext">{{ t('map_refresh') }}</button></div>
       <div v-if="mappingData" class="mapping-screen" :style="{aspectRatio:mappingData.aspect || 16/9,width:'min(100%, '+(250*(mappingData.aspect || 16/9))+'px)'}">
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" :aria-label="t('map_diagram')">
           <rect width="100" height="100" fill="var(--inset)" />
@@ -130,7 +130,7 @@ async function setFps(n) {
         </svg>
       </div>
       <LiveChannelPreview :channels="sortedChannels" :colors="previewColors" :running="store.sync.state === 'running'" />
-      <button :disabled="!mappingData || loading || fpsBusy || toggleBusy" @click="openEditor">{{ t('map_edit') }}</button>
+      <button v-help="{ action: t('help_mapping'), reason: loading || fpsBusy || toggleBusy ? t('help_busy') : !mappingData ? t('help_no_mapping') : mappingData.problem || t('help_display_missing') }" :disabled="!mappingData || loading || fpsBusy || toggleBusy" @click="openEditor">{{ t('map_edit') }}</button>
       <p class="note">{{ t('map_capture_note') }}</p>
     </div>
     <MappingEditor v-if="editor && mappingData" :data="mappingData" :live-colors="previewColors" :live-running="store.sync.state === 'running'" @close="editor=false" @saved="saved" />
@@ -162,6 +162,7 @@ async function setFps(n) {
         <span class="label">{{ t('sync_fps_label') }}</span>
         <div class="fps-chips">
           <button
+            v-help="{ action: t('help_fps'), reason: t('help_busy') }"
             v-for="n in FPS_OPTIONS"
             :key="n"
             type="button"
@@ -176,7 +177,7 @@ async function setFps(n) {
       </div>
     </div>
 
-    <button type="button" class="primary-action" :class="{ running: store.sync.running }" :disabled="(!store.sync.running && !canStart) || store.sync.state === 'stopping' || fpsBusy || toggleBusy" @click="onToggle">
+    <button v-help="{ action: t(store.sync.running ? 'help_stop' : 'help_start'), reason: fpsBusy || toggleBusy || loading || store.sync.state === 'stopping' ? t('help_busy') : !mappingData ? t('help_no_mapping') : mappingData.problem || t('help_display_missing') }" type="button" class="primary-action" :class="{ running: store.sync.running }" :disabled="(!store.sync.running && !canStart) || store.sync.state === 'stopping' || fpsBusy || toggleBusy" @click="onToggle">
       {{ store.sync.running ? t('sync_stop_full') : t('sync_start_full') }}
     </button>
 

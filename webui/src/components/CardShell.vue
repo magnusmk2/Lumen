@@ -54,7 +54,7 @@ function onMasterToggle() {
           {{ t('on_count_fmt', { on: onCount, total: group.lamps.length }) }} &middot; {{ t('scenes_count_fmt', { n: group.scenes.length }) }}
         </div>
       </div>
-      <button type="button" class="edit-btn" @click="emit('edit', group)">{{ t('edit_btn') }}</button>
+      <button v-help="{ action: t('help_edit'), reason: t('help_busy') }" type="button" class="edit-btn" @click="emit('edit', group)">{{ t('edit_btn') }}</button>
       <ToggleSwitch :model-value="anyOn" @update:model-value="onMasterToggle" />
     </div>
 
@@ -77,7 +77,7 @@ function onMasterToggle() {
       <div class="section-head">
         <span>{{ t('scenes_section') }}</span>
         <div class="rule" />
-        <button type="button" class="new-action" @click="emit('new-scene', group)">+ {{ t('new_label') }}</button>
+        <button v-help="{ action: t('help_new_scene'), reason: t('help_busy') }" type="button" class="new-action" @click="emit('new-scene', group)">+ {{ t('new_label') }}</button>
       </div>
       <div class="scene-grid">
         <SceneTile

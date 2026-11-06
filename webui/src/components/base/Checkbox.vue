@@ -1,10 +1,12 @@
 <script setup>
+import { useI18n } from '../../composables/useI18n.js'
+const { t } = useI18n()
 defineProps({ modelValue: { type: Boolean, required: true } })
 const emit = defineEmits(['update:modelValue'])
 </script>
 
 <template>
-  <button
+  <button v-help="t('help_member')"
     type="button"
     class="checkbox"
     :class="{ checked: modelValue }"

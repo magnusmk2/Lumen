@@ -144,10 +144,10 @@ const fmt = v => Number.isFinite(v) ? Math.round(v*100)/100 : ''
   <Teleport to="body">
     <div class="mapping-overlay" @click.self="!saving && emit('close')">
       <section ref="dialog" class="mapping-dialog" role="dialog" aria-modal="true" aria-labelledby="mapping-title" tabindex="-1" @keydown="onKey">
-        <header><h2 id="mapping-title">{{ t('map_title') }}</h2><button :disabled="saving" @click="emit('close')">{{ t('map_cancel') }}</button></header>
+        <header><h2 id="mapping-title">{{ t('map_title') }}</h2><button v-help="{ action: t('help_close'), reason: saving ? t('help_saving') : '' }" :disabled="saving" @click="emit('close')">{{ t('map_cancel') }}</button></header>
         <div class="body">
           <p class="muted">{{ topo.name }} · {{ store.sync.output==='portal-selection' ? t('map_portal') : store.sync.output }}</p>
-          <p v-if="hasMismatch" role="alert">{{ t('map_changed') }} <button @click="rebind">{{ t('map_rebind') }}</button></p>
+          <p v-if="hasMismatch" role="alert">{{ t('map_changed') }} <button v-help="{ action: t('help_rebind'), reason: saving ? t('help_saving') : '' }" @click="rebind">{{ t('map_rebind') }}</button></p>
           <LiveChannelPreview :channels="topo.channels" :colors="liveColors" :running="liveRunning" />
           <label>{{ t('map_preset') }}<select v-model="draft.mode"><option value="legacy">{{ t('map_legacy') }}</option><option value="desk">{{ t('map_desk') }}</option></select></label>
           <div class="diagram" :style="{ aspectRatio: data.aspect || 16/9, width: 'min(100%, '+(300*(data.aspect || 16/9))+'px)' }">
@@ -157,7 +157,7 @@ const fmt = v => Number.isFinite(v) ? Math.round(v*100)/100 : ''
                 <rect v-if="rectangles[ch.id]?.every(Number.isFinite)" :x="rectangles[ch.id][0]*100" :y="rectangles[ch.id][1]*100" :width="(rectangles[ch.id][2]-rectangles[ch.id][0])*100" :height="(rectangles[ch.id][3]-rectangles[ch.id][1])*100" :class="{chosen:selected === ch.id, live:!!liveColor(ch.id)}" :style="{'--region-color':liveColor(ch.id) || 'var(--accent)'}" @pointerdown="dragStart($event,ch.id)" />
               </g>
             </svg>
-            <button v-for="ch in topo.channels" :key="'label'+ch.id" class="region-label" :class="{active:selected===ch.id}" :style="{left:((rectangles[ch.id][0]+rectangles[ch.id][2])*50)+'%',top:((rectangles[ch.id][1]+rectangles[ch.id][3])*50)+'%'}" @click="selected=ch.id" :aria-label="t('map_channel',{id:ch.id})">{{ ch.id }}</button>
+            <button v-help="{ action: t('help_select_channel'), reason: saving ? t('help_saving') : '' }" v-for="ch in topo.channels" :key="'label'+ch.id" class="region-label" :class="{active:selected===ch.id}" :style="{left:((rectangles[ch.id][0]+rectangles[ch.id][2])*50)+'%',top:((rectangles[ch.id][1]+rectangles[ch.id][3])*50)+'%'}" @click="selected=ch.id" :aria-label="t('map_channel',{id:ch.id})">{{ ch.id }}</button>
             <span class="diagram-note">{{ t('map_diagram') }}</span>
           </div>
           <p class="muted small">{{ t('map_capture_note') }}</p>
@@ -175,22 +175,22 @@ const fmt = v => Number.isFinite(v) ? Math.round(v*100)/100 : ''
               <label class="check"><input v-model="draft.devices[g.id].reverse" type="checkbox" />{{ t('map_reverse') }}</label>
               <div class="two"><label>{{ t('map_source_start') }} (%)<input type="number" min="0" max="100" :value="fmt(draft.devices[g.id].start*100)" @input="draft.devices[g.id].start=Number($event.target.value)/100" /></label><label>{{ t('map_source_end') }} (%)<input type="number" min="0" max="100" :value="fmt(draft.devices[g.id].end*100)" @input="draft.devices[g.id].end=Number($event.target.value)/100" /></label></div>
               <div v-for="(id,i) in draft.devices[g.id].order" :key="id" class="channel-row">
-                <button :class="{active:selected===id}" @click="selected=id">{{ t('map_channel',{id}) }} · {{ draft.overrides[id] ? t('map_manual') : t('map_auto') }}</button>
-                <button :disabled="i===0" :aria-label="t('map_move_left')" @click="move(g,i,-1)">←</button><button :disabled="i===g.channels.length-1" :aria-label="t('map_move_right')" @click="move(g,i,1)">→</button>
+                <button v-help="{ action: t('help_select_channel'), reason: saving ? t('help_saving') : '' }" :class="{active:selected===id}" @click="selected=id">{{ t('map_channel',{id}) }} · {{ draft.overrides[id] ? t('map_manual') : t('map_auto') }}</button>
+                <button v-help="{ action: t('help_earlier'), reason: t('help_first') }" :disabled="i===0" :aria-label="t('map_move_left')" @click="move(g,i,-1)">←</button><button v-help="{ action: t('help_later'), reason: t('help_last') }" :disabled="i===g.channels.length-1" :aria-label="t('map_move_right')" @click="move(g,i,1)">→</button>
               </div>
             </template>
-            <button @click="resetDevice(g)">{{ t('map_reset_device') }}</button>
+            <button v-help="{ action: t('help_reset_device'), reason: saving ? t('help_saving') : '' }" @click="resetDevice(g)">{{ t('map_reset_device') }}</button>
           </fieldset>
           <label>{{ t('map_selected') }}<select v-model="selected"><option v-for="ch in topo.channels" :key="ch.id" :value="ch.id">{{ ch.name }} · {{ t('map_channel',{id:ch.id}) }}</option></select></label>
           <div class="two">
             <label v-for="(key,i) in ['map_left','map_top','map_width','map_rect_height']" :key="key">{{ t(key) }} (%)<input type="number" min="0" max="100" step="0.1" :value="fmt(fields[i])" @input="editRect(i,$event.target.value)" /></label>
           </div>
-          <div class="actions"><span class="muted">{{ manual ? t('map_manual') : t('map_auto') }}</span><button @click="resetChannel(selected)">{{ t('map_reset_channel') }}</button><button :disabled="store.sync.running" @click="identify">{{ t('map_identify') }}</button></div>
+          <div class="actions"><span class="muted">{{ manual ? t('map_manual') : t('map_auto') }}</span><button v-help="{ action: t('help_reset_channel'), reason: saving ? t('help_saving') : '' }" @click="resetChannel(selected)">{{ t('map_reset_channel') }}</button><button v-help="{ action: t('help_identify'), reason: t('help_stop_identify') }" :disabled="store.sync.running" @click="identify">{{ t('map_identify') }}</button></div>
           <p class="small muted">{{ t('map_identify_note') }}</p>
           <p v-for="w in warnings" :key="w" class="warning">{{ t('map_warning_'+w) }}</p>
           <p v-if="error" class="error" role="alert">{{ error }}</p>
         </div>
-        <footer><button :disabled="saving" @click="resetAll">{{ t('map_reset_all') }}</button><span /><button :disabled="saving" @click="emit('close')">{{ t('map_cancel') }}</button><button class="primary" :disabled="saving || pending || !!error || hasMismatch" @click="apply">{{ saving ? t('map_saving') : t('map_apply') }}</button></footer>
+        <footer><button v-help="{ action: t('help_reset_all'), reason: saving ? t('help_saving') : '' }" :disabled="saving" @click="resetAll">{{ t('map_reset_all') }}</button><span /><button v-help="{ action: t('help_close'), reason: saving ? t('help_saving') : '' }" :disabled="saving" @click="emit('close')">{{ t('map_cancel') }}</button><button v-help="{ action: t('help_apply'), reason: saving ? t('help_saving') : pending ? t('help_pending') : error ? String(error) : hasMismatch ? t('help_mismatch') : '' }" class="primary" :disabled="saving || pending || !!error || hasMismatch" @click="apply">{{ saving ? t('map_saving') : t('map_apply') }}</button></footer>
       </section>
     </div>
   </Teleport>

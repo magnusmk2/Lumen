@@ -62,10 +62,10 @@ function setStartMinimized(value) {
       </div>
       <FieldInput v-if="changingIp" v-model="newIp" placeholder="192.168.x.x" />
       <div class="bridge-actions">
-        <AppButton v-if="!changingIp" variant="pill" @click="changingIp = true; newIp = config.bridge_ip">{{ t('change_ip_btn') }}</AppButton>
-        <AppButton v-else variant="pill" @click="confirmChangeIp">{{ t('confirm_btn') }}</AppButton>
-        <AppButton variant="pill" @click="emit('repair')">{{ t('repair_short_btn') }}</AppButton>
-        <AppButton variant="danger" @click="onDisconnect">{{ t('disconnect_short_btn') }}</AppButton>
+        <AppButton v-help="{ action: t('help_change_ip'), reason: t('help_busy') }" v-if="!changingIp" variant="pill" @click="changingIp = true; newIp = config.bridge_ip">{{ t('change_ip_btn') }}</AppButton>
+        <AppButton v-help="{ action: t('help_confirm_ip'), reason: t('help_busy') }" v-else variant="pill" @click="confirmChangeIp">{{ t('confirm_btn') }}</AppButton>
+        <AppButton v-help="{ action: t('help_repair'), reason: t('help_busy') }" variant="pill" @click="emit('repair')">{{ t('repair_short_btn') }}</AppButton>
+        <AppButton v-help="{ action: t('help_disconnect'), reason: t('help_busy') }" variant="danger" @click="onDisconnect">{{ t('disconnect_short_btn') }}</AppButton>
       </div>
     </div>
 
@@ -73,10 +73,10 @@ function setStartMinimized(value) {
       <div class="row">
         <span class="label">{{ t('theme_label') }}</span>
         <div class="chips">
-          <button type="button" class="chip" :class="{ selected: theme === 'dark' }" @click="theme = 'dark'">
+          <button v-help="{ action: t('help_theme'), reason: t('help_busy') }" type="button" class="chip" :class="{ selected: theme === 'dark' }" @click="theme = 'dark'">
             <Icon name="moon" :size="13" /> {{ t('theme_dark') }}
           </button>
-          <button type="button" class="chip" :class="{ selected: theme === 'light' }" @click="theme = 'light'">
+          <button v-help="{ action: t('help_theme'), reason: t('help_busy') }" type="button" class="chip" :class="{ selected: theme === 'light' }" @click="theme = 'light'">
             <Icon name="sun" :size="13" /> {{ t('theme_light') }}
           </button>
         </div>
@@ -85,8 +85,8 @@ function setStartMinimized(value) {
       <div class="row">
         <span class="label">{{ t('language_label') }}</span>
         <div class="chips">
-          <button type="button" class="chip" :class="{ selected: config.language === 'en' }" @click="setLanguage('en')">English</button>
-          <button type="button" class="chip" :class="{ selected: config.language === 'fr' }" @click="setLanguage('fr')">Francais</button>
+          <button v-help="{ action: t('help_language'), reason: t('help_busy') }" type="button" class="chip" :class="{ selected: config.language === 'en' }" @click="setLanguage('en')">English</button>
+          <button v-help="{ action: t('help_language'), reason: t('help_busy') }" type="button" class="chip" :class="{ selected: config.language === 'fr' }" @click="setLanguage('fr')">Francais</button>
         </div>
       </div>
 
@@ -94,6 +94,7 @@ function setStartMinimized(value) {
         <span class="label">{{ t('columns_label') }}</span>
         <div class="chips">
           <button
+            v-help="{ action: t('help_columns'), reason: t('help_busy') }"
             v-for="n in [1, 2, 3, 4]"
             :key="n"
             type="button"
@@ -108,7 +109,7 @@ function setStartMinimized(value) {
 
       <div class="row">
         <span class="label">{{ t('start_min_label') }}</span>
-        <ToggleSwitch :model-value="config.start_minimized" :width="38" :height="21" :knob="15" @update:model-value="setStartMinimized" />
+        <ToggleSwitch :help="t('help_minimized')" :model-value="config.start_minimized" :width="38" :height="21" :knob="15" @update:model-value="setStartMinimized" />
       </div>
     </div>
   </div>

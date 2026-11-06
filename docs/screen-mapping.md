@@ -85,3 +85,7 @@ cd webui && npm test && npm run build && npm audit
 ```
 
 The tests cover reported coverage, old mapping compatibility, manual geometry, source changes, RGB/RGBA sampling, persistence, worker cleanup and capture failures. These checks do not replace physical calibration or performance testing in games. Automatic letterbox removal, multiple rectangles per channel, HDR tone mapping and Lumux reading-mode parity are outside this feature.
+
+## Button help
+
+Hover over a button or focus it with the keyboard to see an explanation. Greyed buttons also explain the blocking condition. Disabled controls keep their normal disabled behavior. Press Escape to dismiss a visible tip; press it again to close the mapping editor. Help is available in English and French throughout navigation, setup, pairing, light controls and mapping.

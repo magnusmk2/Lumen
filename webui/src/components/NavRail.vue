@@ -29,6 +29,9 @@ const NAV_ITEMS = [
     </div>
 
     <button
+
+      v-help="{ action: t('help_nav_' + item.key), reason: t('help_busy') }"
+
       v-for="item in NAV_ITEMS"
       :key="item.key"
       type="button"
@@ -42,7 +45,7 @@ const NAV_ITEMS = [
 
     <div class="spacer" />
 
-    <button type="button" class="theme-btn" @click="toggle">
+    <button v-help="{ action: t('help_toggle_theme'), reason: t('help_busy') }" type="button" class="theme-btn" @click="toggle">
       <Icon :name="theme === 'dark' ? 'moon' : 'sun'" :size="16" />
       <span class="label">{{ theme === 'dark' ? t('theme_dark') : t('theme_light') }}</span>
     </button>

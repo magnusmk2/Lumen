@@ -1,7 +1,11 @@
 <script setup>
+import { useI18n } from '../../composables/useI18n.js'
+const { t } = useI18n()
 import { computed } from 'vue'
 
 const props = defineProps({
+  help: { type: String, default: '' },
+  disabledReason: { type: String, default: '' },
   modelValue: { type: Boolean, required: true },
   width: { type: Number, default: 44 },
   height: { type: Number, default: 24 },
@@ -19,7 +23,7 @@ function onClick() {
 </script>
 
 <template>
-  <button
+  <button v-help="{action: help || t(modelValue ? 'help_off' : 'help_on'), reason: disabledReason || t('help_busy')}"
     type="button"
     class="toggle"
     :class="{ on: modelValue, disabled }"
