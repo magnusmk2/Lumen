@@ -136,6 +136,29 @@ Use anonymized fixtures for:
 
 Assert exact normalized widths, direction reversal, no accidental palette-point/channel conflation, and stable HueStream channel ordering. Treat metadata-to-visible-length agreement as a separate hardware calibration result.
 
+## Manual control and unusual installations
+
+Automatic discovery is a starting point, not a restriction. Keep the original discovered topology read-only and separate from user mapping overrides. Manual edits never pretend to change the channel capabilities advertised by the bridge.
+
+The editor supports these explicit overrides:
+- Choose the screen band or set an arbitrary rectangle per channel using Left, Top, Width and Height percentages. Overlap and unsampled gaps are allowed.
+- Adjust strip boundaries numerically or by dragging shared dividers. For example, a physically shortened or partly hidden strip can use visible coverage rather than reported logical lengths.
+- Reverse or reorder source-to-screen assignments independently of Hue channel numbers. An explicit order wins over spatial inference.
+- Choose equal widths, reported coverage or custom widths per device. Multiple strips can each follow the entire band or a specified subsection; they are not automatically joined end to end.
+- Set a bottom inset to avoid a taskbar or black border. A custom rectangle can sample a useful picture region when the visible light is behind an obstruction.
+
+For v1, preserve the one-rectangle-per-channel contract. If a channel illuminates disjoint physical sections, explain that one colour must drive all its members and allow the user to choose a representative rectangle. Multiple weighted rectangles remain a later extension; do not imply that software can independently control members sharing one HueStream channel.
+
+Show the selected channel's mode as Automatic or Manual, with the effective source bounds and a brief reason such as "Manual: physical placement differs from Hue layout". Editing an automatic rectangle creates an explicit manual override. Returning to automatic is an intentional Reset this channel action; Reset device restores that device's suggested mapping in the draft only. Cancel discards resets as well as edits.
+
+Persist per-channel overrides keyed by area/channel plus the membership signature, with device-level width/order overrides tracked separately. Resolving a mapping follows a clear order: validated manual rectangle, device preset override, discovered suggestion, legacy fallback. Reject invalid overrides visibly; do not silently replace them with defaults. Partial automatic/manual mappings are allowed, and the preview must show their exact effective rectangles.
+
+Refreshing bridge data updates suggestions but preserves compatible manual overrides. If member identity or segment layout changes, mark the mapping Needs review and stop it being silently applied. Offer Keep manual mapping only after showing the affected channels and explicitly rebinding the override to the new signature; alternatively regenerate a draft. Changing only a source's display name must not discard calibration.
+
+Apply validates and saves the complete effective mapping revision atomically. The runtime reads that revision between frames. Do not combine stale edits from another window with a refreshed topology. Saving and applying should return separate status when disk persistence succeeds but a runtime apply cannot complete.
+
+Add acceptance cases for mixed manual/automatic channels, nonuniform widths, reverse/reorder, overlapping rectangles, hidden strip sections, reset/cancel, refresh retaining overrides, and topology-change review. Manual control still cannot add independent output channels beyond those exposed by the selected area.
+
 ## Effect on the original plan
 
 The equal-thirds illustration remains useful as a selectable Equal widths preset, but it is no longer the sole desk-strip default. Discovery and topology validation become part of the pure mapping-engine milestone. The static UI concept predates this refinement; add the Region widths choice and device-grouped channels when implementing it.
