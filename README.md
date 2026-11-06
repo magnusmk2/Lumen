@@ -42,7 +42,7 @@ Lumen averages regions of your screen and streams them to the lamps over the
 Hue Entertainment API, at up to 50 frames per second.
 
 Create an Entertainment area in the official Hue app first, then open the
-Sync page (or run `hue-sync`). The original full-height horizontal mapping remains the default. Open **Edit mapping** for a bottom-band desk-strip preset, reported-coverage or equal widths, per-device direction/order, and manual rectangles per channel. Profiles are scoped to bridge, area and monitor. See [screen mapping](docs/screen-mapping.md) for controls and limits.
+Sync page (or run `hue-sync`). The original full-height horizontal mapping remains the default. Open **Edit mapping** for a bottom-band desk-strip preset, reported-coverage or equal widths, per-device direction/order, and manual rectangles per channel. Profiles are scoped to bridge, area and monitor. Optional automatic black-bar detection makes regions follow the detected picture, with an applied-boundary preview. See [screen mapping](docs/screen-mapping.md) for controls and limits.
 
 Screen capture drives a system binary rather than a Python binding, and the
 first backend that works is used:

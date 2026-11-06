@@ -29,6 +29,7 @@ from .config import load_config, stream_lock
 from .bridge import Bridge
 from . import capture, entertainment, huestream, mapping
 from .dtls_stream import HueDTLS
+from .blackbars import BlackBarDetector, remap_regions
 
 
 class ColorSource:
@@ -100,6 +101,9 @@ class ScreenCapture(ColorSource):
                  saturation=1.6, gamma=1.0,
                  width=capture.CAPTURE_W, height=capture.CAPTURE_H,
                  mapping_profile=None, topology=None, mapping_revision=0, on_state=None, cancelled=None):
+        self._bar_detector = BlackBarDetector()
+        self._ignore_black_bars = bool((mapping_profile or {}).get("ignore_black_bars", False))
+        self.sampling_status = None
         self.mapping_profile = mapping_profile
         self.topology = topology
         self.mapping_revision = mapping_revision
@@ -111,6 +115,7 @@ class ScreenCapture(ColorSource):
         self.frames_sent = 0
         self.started_at = None
         self.regions = regions or []
+        self._rectangles = None
         self.backend = "portal" if output == "portal-selection" else backend
         self.output = output
         self.fps = fps
@@ -135,7 +140,9 @@ class ScreenCapture(ColorSource):
                 self.mapping_profile, self.mapping_revision = mapping.load_profile(
                     load_config(), self.topology, self.output)
             rects, _ = mapping.resolve(self.mapping_profile, self.topology)
+            self._rectangles = rects
             self.regions = mapping.pixels(rects, self.width, self.height)
+            self._ignore_black_bars = self.mapping_profile.get("ignore_black_bars", False)
         elif not self.regions:
             self.regions = channel_regions(config, self.width, self.height)
 
@@ -145,7 +152,7 @@ class ScreenCapture(ColorSource):
         rects, _ = mapping.resolve(profile, self.topology)
         regions = mapping.pixels(rects, self.width, self.height)
         with self._mapping_lock:
-            self._pending_mapping = (regions, revision)
+            self._pending_mapping = (regions, rects, revision, profile.get("ignore_black_bars", False))
 
     def prepare(self):
         self._open().latest()
@@ -165,6 +172,8 @@ class ScreenCapture(ColorSource):
             self._stream = None
         if self._stream is None:
             self._opened_for = self.output
+            self._bar_detector.reset()
+            self.sampling_status = None
             self._stream = capture.open_stream(
                 self.backend, self._opened_for, self.fps, self.width, self.height,
                 on_wait=lambda: self.on_state("waiting"), cancelled=self.cancelled)
@@ -173,14 +182,26 @@ class ScreenCapture(ColorSource):
     def sample(self, n):
         with self._mapping_lock:
             if self._pending_mapping is not None:
-                self.regions, self.mapping_revision = self._pending_mapping
+                self.regions, self._rectangles, self.mapping_revision, enabled = self._pending_mapping
+                if enabled != self._ignore_black_bars:
+                    self._bar_detector.reset()
+                self._ignore_black_bars = enabled
                 self._pending_mapping = None
         stream = self._open()
         buf = stream.latest()
+        crop = (0, 0, self.width, self.height)
+        if self._ignore_black_bars:
+            crop = self._bar_detector.process(buf, self.width, self.height, stream.bpp)
+        regions = remap_regions(self.regions, self.width, self.height, crop, self._rectangles)
+        # Publish a complete immutable-by-convention frame snapshot for the UI.
+        self.sampling_status = {"enabled": self._ignore_black_bars,
+            "crop": [crop[0]/self.width, crop[1]/self.height, crop[2]/self.width, crop[3]/self.height],
+            "rectangles": {str(cid): [a/self.width, b/self.height, c/self.width, d/self.height]
+                           for cid, (a,b,c,d) in regions}, "revision": self.mapping_revision}
         out = [capture.punch(
                    capture.region_average(buf, self.width, stream.bpp, box),
                    self.saturation, self.gamma)
-               for _cid, box in self.regions[:n]]
+               for _cid, box in regions[:n]]
         while len(out) < n:               # more channels than mapped regions
             out.append(out[-1] if out else (0, 0, 0))
         return out
@@ -190,6 +211,8 @@ class ScreenCapture(ColorSource):
             self._stream.close()
             self._stream = None
         self._opened_for = None
+        self._bar_detector.reset()
+        self.sampling_status = None
 
 
 def run_stream(source, config_id=None, fps=50, should_run=None):

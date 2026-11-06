@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import ContentPreview from './ContentPreview.vue'
 import LiveChannelPreview from './LiveChannelPreview.vue'
 import { useI18n } from '../composables/useI18n.js'
 import { previewSyncMapping, saveSyncMapping, identifySyncChannel, store } from '../store/index.js'
@@ -7,7 +8,7 @@ const props = defineProps({ data: Object, liveColors: { type: Array, default: ()
 const emit = defineEmits(['close', 'saved'])
 const { t } = useI18n()
 const copy = x => JSON.parse(JSON.stringify(x))
-const draft = ref(copy(props.data.profile))
+const draft = ref({ignore_black_bars: false, ...copy(props.data.profile)})
 const rectangles = ref(copy(props.data.rectangles))
 const warnings = ref(props.data.warnings || [])
 const error = ref(props.data.problem || '')
@@ -59,7 +60,7 @@ function regenerate() {
 }
 watch(draft, regenerate, { deep: true })
 function resetAll() {
-  draft.value = { version: 1, signature: topo.signature, mode: 'desk', height: .2, inset: 0, devices: {}, overrides: {} }
+  draft.value = { version: 1, signature: topo.signature, mode: 'desk', height: .2, inset: 0, devices: {}, overrides: {}, ignore_black_bars: false }
   prepareDevices()
 }
 function rebind() {
@@ -149,6 +150,9 @@ const fmt = v => Number.isFinite(v) ? Math.round(v*100)/100 : ''
           <p class="muted">{{ topo.name }} · {{ store.sync.output==='portal-selection' ? t('map_portal') : store.sync.output }}</p>
           <p v-if="hasMismatch" role="alert">{{ t('map_changed') }} <button v-help="{ action: t('help_rebind'), reason: saving ? t('help_saving') : '' }" @click="rebind">{{ t('map_rebind') }}</button></p>
           <LiveChannelPreview :channels="topo.channels" :colors="liveColors" :running="liveRunning" />
+          <ContentPreview draft-note :sampling="liveRunning ? store.sync.sampling : null" :aspect="data.aspect || 16/9" />
+          <label class="check"><input v-model="draft.ignore_black_bars" type="checkbox" aria-describedby="black-bar-help" />{{ t('bars_enable') }}</label>
+          <p id="black-bar-help" class="muted small">{{ t('bars_help') }}</p>
           <label>{{ t('map_preset') }}<select v-model="draft.mode"><option value="legacy">{{ t('map_legacy') }}</option><option value="desk">{{ t('map_desk') }}</option></select></label>
           <div class="diagram" :style="{ aspectRatio: data.aspect || 16/9, width: 'min(100%, '+(300*(data.aspect || 16/9))+'px)' }">
             <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" :aria-label="t('map_diagram')">

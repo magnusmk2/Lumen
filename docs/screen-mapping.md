@@ -89,3 +89,15 @@ The tests cover reported coverage, old mapping compatibility, manual geometry, s
 ## Button help
 
 Hover over a button or focus it with the keyboard to see an explanation. Greyed buttons also explain the blocking condition. Disabled controls keep their normal disabled behavior. Press Escape to dismiss a visible tip; press it again to close the mapping editor. Help is available in English and French throughout navigation, setup, pairing, light controls and mapping.
+
+## Automatic black-bar detection
+
+In **Sync → Edit mapping**, enable **Ignore black bars automatically**, then Apply. The setting is saved with the bridge/area/monitor profile and also works when the CLI loads that saved profile. Existing profiles default to off. Cancel leaves both the saved profile and running sampler unchanged.
+
+The sampler looks for stable paired letterbox/pillarbox bars in its existing low-resolution capture. It requires a visible interior and a one-second stable candidate; black/dim frames and temporary one-sided overlays retain the accepted boundary. It returns to the full picture after 0.4 seconds of clear full-frame content. Asymmetric borders are deliberately not detected. Use fullscreen video: browser chrome, taskbars or window borders touching the capture edges can prevent detection; this stage does not locate a player window inside a desktop. This is a conservative visual heuristic: it cannot distinguish every dark composition from genuine bars, and its boundary is quantized to the capture grid.
+
+When enabled, all mapping coordinates are relative to the detected picture. Bottom band height, bottom inset, device screen range and manual rectangles keep their meaning inside that picture. An inset previously used only to avoid a black bar should usually be set to zero; the app does not silently change your calibration.
+
+The applied-picture preview shows the accepted content boundary and effective channel sampling regions. The editable diagram stays in picture-relative coordinates; its draft is applied only after Apply. Full-monitor capture still occurs; detection only changes which captured pixels contribute to the lights. No additional capture session, screenshot upload or image storage is introduced.
+
+The [upgrade plan](sync-upgrades.md) records the research and gates for later response/colour, capture and stop-behavior improvements.

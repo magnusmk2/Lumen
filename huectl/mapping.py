@@ -116,7 +116,7 @@ def legacy_regions(topology):
 
 def default_profile(topology):
     return {'version': VERSION, 'signature': topology['signature'], 'mode': 'legacy',
-        'height': .2, 'inset': 0, 'devices': {}, 'overrides': {}}
+        'height': .2, 'inset': 0, 'devices': {}, 'overrides': {}, 'ignore_black_bars': False}
 
 
 def _number(v):
@@ -131,6 +131,8 @@ def validate(profile, topology):
         raise ValueError('Source layout changed; review and rebind the mapping')
     if profile.get('mode') not in ('legacy', 'desk'):
         raise ValueError('Invalid mapping preset')
+    if type(profile.get('ignore_black_bars', False)) is not bool:
+        raise ValueError('Invalid black-bar detection setting')
     height, inset = profile.get('height'), profile.get('inset')
     if not all(_number(v) for v in (height, inset)) or not (
         .05 <= height <= 1 and 0 <= inset and height + inset <= 1 + 1e-9):

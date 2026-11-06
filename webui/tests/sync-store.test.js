@@ -61,3 +61,14 @@ test('refresh preserves active worker context over stale saved preferences', asy
   assert.equal(store.sync.output, 'active-monitor')
   assert.equal(store.sync.fps, 25)
 })
+
+test('sampling telemetry updates atomically and clears when the source disappears', async () => {
+  const { refreshSyncStatus } = await import('../src/store/index.js')
+  const sampling={enabled:true,crop:[0,.1,1,.9],rectangles:{'7':[0,.7,1,.9]},revision:4}
+  api.sync_status=async()=>({running:true,state:'running',sampling})
+  await refreshSyncStatus()
+  assert.deepEqual(JSON.parse(JSON.stringify(store.sync.sampling)),sampling)
+  api.sync_status=async()=>({running:false,state:'idle'})
+  await refreshSyncStatus()
+  assert.equal(store.sync.sampling,null)
+})

@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import ContentPreview from '../components/ContentPreview.vue'
 import LiveChannelPreview from '../components/LiveChannelPreview.vue'
 import MappingEditor from '../components/MappingEditor.vue'
 import DragBar from '../components/base/DragBar.vue'
@@ -129,6 +130,7 @@ async function setFps(n) {
           <rect v-for="(ch,i) in sortedChannels" :key="ch.id" :x="mappingData.rectangles[ch.id][0]*100" :y="mappingData.rectangles[ch.id][1]*100" :width="(mappingData.rectangles[ch.id][2]-mappingData.rectangles[ch.id][0])*100" :height="(mappingData.rectangles[ch.id][3]-mappingData.rectangles[ch.id][1])*100" :fill="previewColors[i] || 'var(--accent)'" :fill-opacity="store.sync.state === 'running' ? .8 : .25" stroke="var(--ink-3)" stroke-width="1" vector-effect="non-scaling-stroke" />
         </svg>
       </div>
+      <ContentPreview :sampling="store.sync.state === 'running' ? store.sync.sampling : null" :aspect="mappingData?.aspect || 16/9" />
       <LiveChannelPreview :channels="sortedChannels" :colors="previewColors" :running="store.sync.state === 'running'" />
       <button v-help="{ action: t('help_mapping'), reason: loading || fpsBusy || toggleBusy ? t('help_busy') : !mappingData ? t('help_no_mapping') : mappingData.problem || t('help_display_missing') }" :disabled="!mappingData || loading || fpsBusy || toggleBusy" @click="openEditor">{{ t('map_edit') }}</button>
       <p class="note">{{ t('map_capture_note') }}</p>

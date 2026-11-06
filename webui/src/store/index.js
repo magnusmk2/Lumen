@@ -12,6 +12,7 @@ export const store = reactive({
 
   sync: {
     initialized: false,
+    sampling: null,
     areas: [],
     state: "idle",
     error: null,
@@ -324,7 +325,7 @@ export async function identifySyncChannel(channel) {
 }
 export async function refreshSyncStatus() {
   const status = await syncStatus()
-  Object.assign(store.sync, { running: status.running, state: status.state || 'idle', error: status.error })
+  Object.assign(store.sync, { running: status.running, state: status.state || 'idle', error: status.error, sampling: status.sampling || null })
   return status
 }
 export async function chooseSyncArea(id) {

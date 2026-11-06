@@ -492,6 +492,26 @@ STRINGS['fr'].update({
     'help_nav_setup': 'Gérer la connexion au pont et les préférences.',
 })
 
+
+STRINGS['en'].update({
+    'bars_enable': 'Ignore black bars automatically',
+    'bars_help': 'After Apply, regions follow the detected picture. Stable paired bars are detected automatically; dark scenes hold the last boundary. Existing inset and manual regions are relative to the picture. Use zero inset if you only used it to avoid black bars.',
+    'bars_live': 'Applied picture boundary',
+    'bars_active': 'Black bars excluded · current sampling regions',
+    'bars_full': 'Detection on · using full picture until stable bars are found',
+    'bars_off': 'Detection off · using the full capture',
+    'bars_draft': 'Live applied output; the editable diagram below remains relative to the picture.',
+})
+STRINGS['fr'].update({
+    'bars_enable': 'Ignorer automatiquement les bandes noires',
+    'bars_help': 'Après application, les régions suivent l’image détectée. Les bandes symétriques stables sont détectées ; les scènes sombres conservent la dernière limite. La marge et les régions manuelles sont relatives à l’image. Utilisez une marge nulle si elle servait uniquement à éviter les bandes noires.',
+    'bars_live': 'Limite de l’image appliquée',
+    'bars_active': 'Bandes noires exclues · régions échantillonnées',
+    'bars_full': 'Détection activée · image entière en attendant des bandes stables',
+    'bars_off': 'Détection désactivée · capture entière',
+    'bars_draft': 'Sortie appliquée en direct ; le diagramme modifiable ci-dessous reste relatif à l’image.',
+})
+
 LANG = "en"
 
 

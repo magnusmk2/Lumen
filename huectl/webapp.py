@@ -592,7 +592,8 @@ class WebSync:
             return {"running": self._running, "state": self._state, "error": self._error,
                     "fps": self._fps, "area": self._area, "output": self._output,
                     "revision": self._source.mapping_revision if self._source else None,
-                    "frames_sent": self._source.frames_sent if self._source else 0}
+                    "frames_sent": self._source.frames_sent if self._source else 0,
+                    "sampling": self._source.sampling_status if self._source else None}
 
     def identify(self, area, channel):
         with self._lock:
