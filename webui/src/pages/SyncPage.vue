@@ -97,6 +97,7 @@ async function reloadContext() {
   await changeContext(async () => { await initSync(true) })
   if (!previewTimer && alive) previewTimer = setInterval(poll, 250)
 }
+function openEditor(event) { event.currentTarget.focus(); editor.value = true }
 async function saved() { editor.value = false; await loadMapping() }
 
 function commitBoost(pct) {
@@ -130,7 +131,7 @@ async function setFps(n) {
       <div class="channel-grid" :style="{ gridTemplateColumns: `repeat(${sortedChannels.length || 1}, minmax(0,1fr))` }">
         <div v-for="(ch,i) in sortedChannels" :key="ch.id" class="channel-cell"><div class="channel-bar" :style="{background:previewColors[i] || PLACEHOLDER}"/><div class="channel-name" :title="ch.name">{{ ch.name }} · {{ ch.id }}</div></div>
       </div>
-      <button :disabled="!mappingData || loading || fpsBusy || toggleBusy" @click="editor=true">{{ t('map_edit') }}</button>
+      <button :disabled="!mappingData || loading || fpsBusy || toggleBusy" @click="openEditor">{{ t('map_edit') }}</button>
       <p class="note">{{ t('map_capture_note') }}</p>
     </div>
     <MappingEditor v-if="editor && mappingData" :data="mappingData" @close="editor=false" @saved="saved" />

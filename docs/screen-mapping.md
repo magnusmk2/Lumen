@@ -79,7 +79,7 @@ Development checks:
 ```sh
 python -m unittest discover -s tests -v
 python -m compileall -q huectl
-cd webui && npm run build && npm audit
+cd webui && npm test && npm run build && npm audit
 ```
 
 The tests cover reported coverage, old mapping compatibility, manual geometry, source changes, RGB/RGBA sampling, persistence, worker cleanup and capture failures. These checks do not replace physical calibration or performance testing in games. Automatic letterbox removal, multiple rectangles per channel, HDR tone mapping and Lumux reading-mode parity are outside this feature.
