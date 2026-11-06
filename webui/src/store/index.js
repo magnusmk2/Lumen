@@ -12,6 +12,9 @@ export const store = reactive({
 
   sync: {
     initialized: false,
+    areas: [],
+    state: "idle",
+    error: null,
     running: false,
     fps: 30,
     output: '',
@@ -256,31 +259,35 @@ export async function initSync() {
 
   const cfgs = await listEntertainmentConfigs()
   if (cfgs.data?.length) {
-    store.sync.configId = cfgs.data[0].id
+    store.sync.areas = cfgs.data
+    const saved = await loadConfig()
+    store.sync.configId = saved.sync_area_id || cfgs.data[0].id
     store.sync.channels = await getChannelNames(store.sync.configId)
   }
   store.sync.outputs = await listOutputs()
 
   const cfg = await loadConfig()
-  store.sync.output = cfg.sync_output || ''
+  store.sync.output = cfg.sync_output || store.sync.outputs[0] || ''
   store.sync.saturation = cfg.sync_saturation ?? 1.6
   store.sync.fps = cfg.sync_fps ?? 30
 
   const status = await syncStatus()
   store.sync.running = status.running
+  store.sync.state = status.state || "idle"
+  store.sync.error = status.error
   if (status.running) store.sync.fps = status.fps
 }
 
 export async function startSync() {
   const { output, saturation, fps, configId } = store.sync
   const res = (await api()?.start_sync(output, saturation, fps, configId)) ?? { error: 'no_api' }
-  if (!res.error) store.sync.running = true
+  if (!res.error) { store.sync.running = true; store.sync.state = "starting" }
   return res
 }
 
 export async function stopSync() {
   const res = (await api()?.stop_sync()) ?? { error: 'no_api' }
-  store.sync.running = false
+  await refreshSyncStatus()
   return res
 }
 
@@ -306,4 +313,27 @@ export async function setSyncFps(fps) {
     if (res.error) return res
   }
   return { ok: true }
+}
+
+export async function getSyncMapping() {
+  return await api()?.get_sync_mapping(store.sync.configId, store.sync.output) ?? { error: 'no_api' }
+}
+export async function previewSyncMapping(profile) {
+  return await api()?.preview_sync_mapping(store.sync.configId, store.sync.output, profile) ?? { error: 'no_api' }
+}
+export async function saveSyncMapping(profile, revision) {
+  return await api()?.save_sync_mapping(store.sync.configId, store.sync.output, profile, revision) ?? { error: 'no_api' }
+}
+export async function identifySyncChannel(channel) {
+  return await api()?.identify_sync_channel(store.sync.configId, channel) ?? { error: 'no_api' }
+}
+export async function refreshSyncStatus() {
+  const status = await syncStatus()
+  Object.assign(store.sync, { running: status.running, state: status.state || 'idle', error: status.error })
+  return status
+}
+export async function chooseSyncArea(id) {
+  store.sync.configId = id
+  store.sync.channels = await getChannelNames(id)
+  await saveSettings({ sync_area_id: id })
 }

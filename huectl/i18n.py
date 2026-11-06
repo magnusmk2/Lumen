@@ -237,6 +237,138 @@ STRINGS = {
     },
 }
 
+# Screen mapping editor. Keep English and French key sets identical.
+STRINGS['en'].update({'map_apply': 'Apply',
+ 'map_area': 'Entertainment area',
+ 'map_auto': 'Automatic',
+ 'map_cancel': 'Cancel',
+ 'map_capabilities': '{channels} sync channels / {segments} internal segments',
+ 'map_capture_note': 'Only the outlined regions influence the lights. Capture still accesses the selected '
+                     'monitor.',
+ 'map_changed': 'The source layout changed. Review before keeping overrides or resetting.',
+ 'map_channel': 'Channel {id}',
+ 'map_desk': 'Desk strip (bottom band)',
+ 'map_diagram': 'Sampling regions (diagram)',
+ 'map_edit': 'Edit mapping',
+ 'map_equal': 'Equal widths',
+ 'map_height': 'Band height',
+ 'map_identify': 'Identify segment',
+ 'map_identify_note': 'While sync is stopped, Identify briefly changes the area lights. Previous light state '
+                      'is not guaranteed to be restored.',
+ 'map_inset': 'Bottom inset',
+ 'map_left': 'Left',
+ 'map_legacy': 'Current mapping (full height)',
+ 'map_manual': 'Manual',
+ 'map_move_left': 'Move earlier in strip order',
+ 'map_move_right': 'Move later in strip order',
+ 'map_no_coverage': 'Reliable coverage is unavailable. Equal widths are a starting point; adjust manually.',
+ 'map_preset': 'Layout',
+ 'map_rebind': 'Keep compatible manual regions',
+ 'map_rect_height': 'Height',
+ 'map_refresh': 'Refresh',
+ 'map_reported': 'Reported coverage',
+ 'map_reset_all': 'Reset all',
+ 'map_reset_channel': 'Reset this channel',
+ 'map_reset_device': 'Reset this device',
+ 'map_reverse': 'Reverse strip direction',
+ 'map_saving': 'Saving...',
+ 'map_selected': 'Selected channel',
+ 'map_source_end': 'Screen range end',
+ 'map_source_start': 'Screen range start',
+ 'map_state_error': 'Sync failed; see the error above.',
+ 'map_state_identifying': 'Identifying segment...',
+ 'map_state_idle': 'Idle',
+ 'map_state_running': 'Syncing screen colours',
+ 'map_state_starting': 'Starting capture and bridge connection...',
+ 'map_state_stopping': 'Stopping...',
+ 'map_state_waiting': 'Waiting for screen selection...',
+ 'map_title': 'Screen mapping',
+ 'map_top': 'Top',
+ 'map_verify_coverage': 'Based on bridge data. Verify the visible lengths on your strip.',
+ 'map_warning_ambiguous_order': 'Source positions do not establish a unique order. Identify and reorder the '
+                                'segments.',
+ 'map_warning_coverage_unavailable': 'Reported coverage is unavailable; using equal widths.',
+ 'map_warning_segment_bounds': 'Invalid segment geometry was reported by the bridge.',
+ 'map_warning_segment_reference': 'Some segment references are unavailable. Use manual regions.',
+ 'map_warning_shared_channel': 'A channel drives multiple sources together; they cannot be controlled '
+                               'separately.',
+ 'map_width': 'Width',
+ 'map_widths': 'Region widths'})
+STRINGS['fr'].update({'map_apply': 'Appliquer',
+ 'map_area': 'Espace de loisirs',
+ 'map_auto': 'Automatique',
+ 'map_cancel': 'Annuler',
+ 'map_capabilities': '{channels} canaux de synchronisation / {segments} segments internes',
+ 'map_capture_note': 'Seules les zones délimitées influencent les lumières. La capture accède toujours au '
+                     'moniteur sélectionné.',
+ 'map_changed': 'La disposition source a changé. Vérifiez avant de conserver les réglages ou de '
+                'réinitialiser.',
+ 'map_channel': 'Canal {id}',
+ 'map_desk': 'Ruban de bureau (bande du bas)',
+ 'map_diagram': 'Zones de capture (schéma)',
+ 'map_edit': 'Modifier les zones',
+ 'map_equal': 'Largeurs égales',
+ 'map_height': 'Hauteur de bande',
+ 'map_identify': 'Identifier le segment',
+ 'map_identify_note': 'À l’arrêt, Identifier modifie brièvement les lumières de l’espace. Le rétablissement '
+                      'de leur état précédent n’est pas garanti.',
+ 'map_inset': 'Marge inférieure',
+ 'map_left': 'Gauche',
+ 'map_legacy': 'Disposition actuelle (pleine hauteur)',
+ 'map_manual': 'Manuel',
+ 'map_move_left': 'Déplacer plus tôt dans le ruban',
+ 'map_move_right': 'Déplacer plus loin dans le ruban',
+ 'map_no_coverage': 'Couverture fiable indisponible. Commencez par des largeurs égales et ajustez '
+                    'manuellement.',
+ 'map_preset': 'Disposition',
+ 'map_rebind': 'Conserver les zones manuelles compatibles',
+ 'map_rect_height': 'Hauteur',
+ 'map_refresh': 'Actualiser',
+ 'map_reported': 'Couverture déclarée',
+ 'map_reset_all': 'Tout réinitialiser',
+ 'map_reset_channel': 'Réinitialiser ce canal',
+ 'map_reset_device': 'Réinitialiser cet appareil',
+ 'map_reverse': 'Inverser le sens du ruban',
+ 'map_saving': 'Enregistrement...',
+ 'map_selected': 'Canal sélectionné',
+ 'map_source_end': 'Fin de la plage écran',
+ 'map_source_start': 'Début de la plage écran',
+ 'map_state_error': 'Échec de synchronisation ; voir l’erreur ci-dessus.',
+ 'map_state_identifying': 'Identification du segment...',
+ 'map_state_idle': 'À l’arrêt',
+ 'map_state_running': 'Synchronisation des couleurs de l’écran',
+ 'map_state_starting': 'Démarrage de la capture et connexion au pont...',
+ 'map_state_stopping': 'Arrêt...',
+ 'map_state_waiting': 'En attente du choix de l’écran...',
+ 'map_title': 'Zones de capture',
+ 'map_top': 'Haut',
+ 'map_verify_coverage': 'Selon les données du pont. Vérifiez les longueurs visibles sur votre ruban.',
+ 'map_warning_ambiguous_order': 'Les positions ne déterminent pas un ordre unique. Identifiez et réordonnez '
+                                'les segments.',
+ 'map_warning_coverage_unavailable': 'Couverture déclarée indisponible ; largeurs égales utilisées.',
+ 'map_warning_segment_bounds': 'Le pont a signalé une géométrie de segment invalide.',
+ 'map_warning_segment_reference': 'Certaines références de segments sont indisponibles. Utilisez des zones '
+                                  'manuelles.',
+ 'map_warning_shared_channel': 'Un canal pilote plusieurs sources ensemble ; elles ne peuvent pas être '
+                               'contrôlées séparément.',
+ 'map_width': 'Largeur',
+ 'map_widths': 'Largeurs des zones'})
+
+STRINGS['en']['map_warning_segment_overlap'] = 'Overlapping segment ranges were reported. Automatic coverage is unavailable.'
+STRINGS['fr']['map_warning_segment_overlap'] = 'Des plages de segments se chevauchent. La couverture automatique est indisponible.'
+STRINGS['en']['map_unavailable'] = 'Unavailable'
+STRINGS['fr']['map_unavailable'] = 'Indisponible'
+
+STRINGS['en']['map_portal'] = 'Choose screen when starting'
+STRINGS['fr']['map_portal'] = 'Choisir l’écran au démarrage'
+STRINGS['en']['map_warning_portal_selection'] = 'This layout applies to the screen you choose in the sharing dialog. Verify the regions after selection.'
+STRINGS['fr']['map_warning_portal_selection'] = 'Cette disposition s’applique à l’écran choisi dans la boîte de partage. Vérifiez les zones après sélection.'
+
+STRINGS['en']['map_device_layout'] = 'Layout for this device'
+STRINGS['fr']['map_device_layout'] = 'Disposition de cet appareil'
+STRINGS['en']['map_inherit'] = 'Use selected layout'
+STRINGS['fr']['map_inherit'] = 'Utiliser la disposition choisie'
+
 LANG = "en"
 
 

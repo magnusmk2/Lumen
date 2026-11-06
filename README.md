@@ -1,5 +1,7 @@
 # Lumen
 
+This fork adds configurable screen mapping. Original project: [PierreSylla/Lumen](https://github.com/PierreSylla/Lumen). Licensed GPL-3.0-or-later.
+
 Desktop control for Philips Hue lights, built for Linux/Wayland (Hyprland,
 but the UI runs anywhere `pywebview`'s GTK/WebKit backend does). Everything
 goes through the bridge's local API (CLIP v2): no cloud, and no
@@ -40,9 +42,7 @@ Lumen averages regions of your screen and streams them to the lamps over the
 Hue Entertainment API, at up to 50 frames per second.
 
 Create an Entertainment area in the official Hue app first, then open the
-Sync page (or run `hue-sync`). Each channel's horizontal position in that
-area is mapped onto the matching slice of the screen, so left lamps follow the
-left of the picture.
+Sync page (or run `hue-sync`). The original full-height horizontal mapping remains the default. Open **Edit mapping** for a bottom-band desk-strip preset, reported-coverage or equal widths, per-device direction/order, and manual rectangles per channel. Profiles are scoped to bridge, area and monitor. See [screen mapping](docs/screen-mapping.md) for controls and limits.
 
 Screen capture drives a system binary rather than a Python binding, and the
 first backend that works is used:
@@ -232,9 +232,6 @@ webui/                 Vue 3 UI source, built to huectl/webui_dist/ (npm run
 
 ## Ideas for later
 
-- Pick the Entertainment area from the UI (the first one is used today).
-- Per-channel vertical mapping, using the height of each lamp rather than a
-  full-height average.
 - A toast/error affordance for failed writes (the bridge's own transient
   "communication issues" warnings are currently swallowed silently).
 

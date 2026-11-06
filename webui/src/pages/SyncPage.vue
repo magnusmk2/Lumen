@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import MappingEditor from '../components/MappingEditor.vue'
 import DragBar from '../components/base/DragBar.vue'
 import { useI18n } from '../composables/useI18n.js'
 import {
@@ -12,6 +13,9 @@ import {
   setSyncOutput,
   setSyncSaturation,
   setSyncFps,
+  getSyncMapping,
+  refreshSyncStatus,
+  chooseSyncArea,
 } from '../store/index.js'
 
 const { t } = useI18n()
@@ -20,92 +24,101 @@ const FPS_OPTIONS = [20, 25, 30, 40, 50]
 const PLACEHOLDER = 'var(--inset)'
 
 const errorMsg = ref('')
+const mappingData = ref(null), editor = ref(false), loading = ref(false)
+const canStart = computed(() => !!mappingData.value && !mappingData.value.problem && !loading.value && store.sync.outputs.includes(store.sync.output) && store.sync.areas.some(a=>a.id===store.sync.configId))
+const sortedChannels = computed(() => mappingData.value?.topology.channels || [])
 const previewColors = ref([])
 const boostPct = computed(() => Math.round((store.sync.saturation - 1) * 50))
 
-let previewTimer = null
+let previewTimer = null, alive = true, statusBusy = false, mapRequest = 0
 
 onMounted(async () => {
-  await apiReady()
-  await initSync()
-  if (store.sync.running) startPreviewPolling()
+  try {
+    await apiReady()
+    await initSync()
+    await loadMapping()
+    if (alive) {
+      previewTimer = setInterval(poll, 250)
+      await poll()
+    }
+  } catch (e) { errorMsg.value = String(e) }
 })
-
-onUnmounted(() => clearInterval(previewTimer))
-
-function startPreviewPolling() {
-  clearInterval(previewTimer)
-  previewTimer = setInterval(async () => {
-    previewColors.value = await syncPreview()
-  }, 200)
+onUnmounted(() => { alive = false; mapRequest++; clearInterval(previewTimer) })
+async function loadMapping() {
+  const request = ++mapRequest
+  loading.value = true
+  try {
+    const result = await getSyncMapping()
+    if (!alive || request !== mapRequest) return
+    if (result.error) { errorMsg.value = result.error; mappingData.value = null }
+    else { mappingData.value = result; errorMsg.value = result.problem || '' }
+  } catch (e) { if (alive) errorMsg.value = String(e) }
+  finally { if (alive && request === mapRequest) loading.value = false }
 }
-
-function stopPreviewPolling() {
-  clearInterval(previewTimer)
-  previewColors.value = []
+async function poll() {
+  if (statusBusy || !alive) return
+  statusBusy = true
+  try {
+    const status = await refreshSyncStatus()
+    if (!alive) return
+    if (status.error) errorMsg.value = status.error
+    previewColors.value = status.running ? await syncPreview() : []
+  } catch (e) { if (alive) errorMsg.value = String(e) }
+  finally { statusBusy = false }
 }
-
 async function onToggle() {
-  if (store.sync.running) {
-    await stopSync()
-    stopPreviewPolling()
-    return
-  }
   errorMsg.value = ''
-  const res = await startSync()
-  if (res.error) {
-    errorMsg.value = res.error
-    return
-  }
-  startPreviewPolling()
+  const res = store.sync.running ? await stopSync() : await startSync()
+  if (res.error) errorMsg.value = res.error
+  await poll()
 }
-
-function onOutputChange(e) {
+async function onOutputChange(e) {
   setSyncOutput(e.target.value)
+  await loadMapping()
 }
+async function onAreaChange(e) {
+  await chooseSyncArea(e.target.value)
+  await loadMapping()
+}
+async function saved() { editor.value = false; await loadMapping() }
 
 function commitBoost(pct) {
   setSyncSaturation(Math.round((1 + pct / 50) * 10) / 10)
 }
 
 async function setFps(n) {
-  const wasRunning = store.sync.running
-  if (wasRunning) stopPreviewPolling()
   const res = await setSyncFps(n)
-  if (res.error) {
-    errorMsg.value = res.error
-  } else if (wasRunning) {
-    startPreviewPolling()
-  }
+  if (res.error) errorMsg.value = res.error
 }
 </script>
 
 <template>
   <div class="sync-page">
     <div class="card">
-      <div class="label-row"><span>{{ t('screen_channels_label') }}</span></div>
-      <div class="preview" :style="{ gridTemplateColumns: `repeat(${store.sync.channels.length || 1}, 1fr)` }">
-        <div
-          v-for="(ch, i) in store.sync.channels"
-          :key="ch.channel_id"
-          class="preview-block"
-          :style="{ background: store.sync.running ? (previewColors[i] || PLACEHOLDER) : PLACEHOLDER }"
-        />
+      <label class="context-label">{{ t('map_area') }}
+        <select :value="store.sync.configId" :disabled="store.sync.running || loading" @change="onAreaChange"><option v-if="!store.sync.areas.some(a=>a.id===store.sync.configId)" :value="store.sync.configId" disabled>{{ t('map_unavailable') }}</option><option v-for="area in store.sync.areas" :key="area.id" :value="area.id">{{ area.name }}</option></select>
+      </label>
+      <div class="label-row"><span>{{ t('map_title') }}</span><button :disabled="loading" @click="loadMapping">{{ t('map_refresh') }}</button></div>
+      <div v-if="mappingData" class="mapping-screen" :style="{aspectRatio:mappingData.aspect || 16/9,width:'min(100%, '+(250*(mappingData.aspect || 16/9))+'px)'}">
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" :aria-label="t('map_diagram')">
+          <rect width="100" height="100" fill="var(--inset)" />
+          <rect v-for="(ch,i) in sortedChannels" :key="ch.id" :x="mappingData.rectangles[ch.id][0]*100" :y="mappingData.rectangles[ch.id][1]*100" :width="(mappingData.rectangles[ch.id][2]-mappingData.rectangles[ch.id][0])*100" :height="(mappingData.rectangles[ch.id][3]-mappingData.rectangles[ch.id][1])*100" :fill="previewColors[i] || 'var(--accent)'" fill-opacity=".25" stroke="var(--ink-3)" stroke-width="1" vector-effect="non-scaling-stroke" />
+        </svg>
       </div>
-      <div class="channel-grid" :style="{ gridTemplateColumns: `repeat(${store.sync.channels.length || 1}, 1fr)` }">
-        <div v-for="(ch, i) in store.sync.channels" :key="ch.channel_id" class="channel-cell">
-          <div class="channel-bar" :style="{ background: store.sync.running ? (previewColors[i] || PLACEHOLDER) : PLACEHOLDER }" />
-          <div class="channel-name">{{ ch.name }}</div>
-        </div>
+      <div class="channel-grid" :style="{ gridTemplateColumns: `repeat(${sortedChannels.length || 1}, minmax(0,1fr))` }">
+        <div v-for="(ch,i) in sortedChannels" :key="ch.id" class="channel-cell"><div class="channel-bar" :style="{background:previewColors[i] || PLACEHOLDER}"/><div class="channel-name" :title="ch.name">{{ ch.name }} · {{ ch.id }}</div></div>
       </div>
+      <button :disabled="!mappingData || loading" @click="editor=true">{{ t('map_edit') }}</button>
+      <p class="note">{{ t('map_capture_note') }}</p>
     </div>
+    <MappingEditor v-if="editor && mappingData" :data="mappingData" @close="editor=false" @saved="saved" />
 
     <div class="card options">
       <div class="row">
         <span class="label">{{ t('sync_monitor') }}</span>
-        <select class="output-select" :value="store.sync.output" @change="onOutputChange">
-          <option value="">{{ t('sync_auto') }}</option>
-          <option v-for="o in store.sync.outputs" :key="o" :value="o">{{ o }}</option>
+        <select class="output-select" :value="store.sync.output" :disabled="store.sync.running" @change="onOutputChange">
+          <option v-if="!store.sync.outputs.includes(store.sync.output)" :value="store.sync.output" disabled>{{ store.sync.output }} ({{ t('map_unavailable') }})</option>
+          <option v-for="o in store.sync.outputs" :key="o" :value="o">{{ o==='portal-selection' ? t('map_portal') : o }}</option>
         </select>
       </div>
 
@@ -140,16 +153,18 @@ async function setFps(n) {
       </div>
     </div>
 
-    <button type="button" class="primary-action" :class="{ running: store.sync.running }" @click="onToggle">
+    <button type="button" class="primary-action" :class="{ running: store.sync.running }" :disabled="(!store.sync.running && !canStart) || store.sync.state === 'stopping'" @click="onToggle">
       {{ store.sync.running ? t('sync_stop_full') : t('sync_start_full') }}
     </button>
 
     <div v-if="errorMsg" class="error">{{ errorMsg }}</div>
-    <div class="note">{{ store.sync.running ? t('sync_note_running_fmt', { fps: store.sync.fps }) : t('sync_note_idle') }}</div>
+    <div class="note" role="status" aria-live="polite">{{ t('map_state_'+store.sync.state) }}</div>
   </div>
 </template>
 
 <style scoped>
+.mapping-screen{margin:auto;border:1px solid var(--panel-line);border-radius:8px;overflow:hidden}.mapping-screen svg{width:100%;height:100%;display:block}.context-label{display:flex;flex-direction:column;gap:6px}select,button{font:inherit}select{appearance:none;background:var(--inset);color:var(--ink)}option{background:var(--inset);color:var(--ink)}button{cursor:pointer;color:var(--ink);background:var(--inset);border:1px solid var(--panel-line);border-radius:7px;padding:8px}button:disabled{opacity:.5;cursor:default}button:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.context-label select{background:var(--inset);color:var(--ink);padding:8px;border:1px solid var(--panel-line);border-radius:7px}.label-row{display:flex;align-items:center;justify-content:space-between}.note{line-height:1.5}@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+
 .sync-page {
   display: flex;
   flex-direction: column;

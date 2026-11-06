@@ -34,7 +34,8 @@ SESSION_IFACE = "org.freedesktop.portal.Session"
 class PortalSession:
     """A ScreenCast session: create, select sources, start, open the remote."""
 
-    def __init__(self, timeout_ms=120000):
+    def __init__(self, timeout_ms=120000, cancelled=None):
+        self.cancelled = cancelled or (lambda: False)
         self.timeout_ms = timeout_ms
         try:
             self.conn = Gio.bus_get_sync(Gio.BusType.SESSION, None)
@@ -62,10 +63,31 @@ class PortalSession:
             return False
 
         timeout_id = GLib.timeout_add(self.timeout_ms, on_timeout)
+        cancelled_by_timer = []
+        def check_cancelled():
+            if self.cancelled():
+                cancelled_by_timer.append(True)
+                loop.quit()
+                return False
+            return True
+        cancel_id = GLib.timeout_add(50, check_cancelled)
         loop.run()
+        if self.cancelled():
+            # The request may still own a picker even after the worker stops.
+            try:
+                self.conn.call_sync(BUS, request_path, REQUEST_IFACE, "Close", None,
+                                    None, Gio.DBusCallFlags.NONE, 2000, None)
+            except GLib.Error:
+                pass
+        if not cancelled_by_timer:
+            GLib.source_remove(cancel_id)
         self.conn.signal_unsubscribe(sub_id)
         if box:
             GLib.source_remove(timeout_id)
+        if self.cancelled():
+            if not box:
+                GLib.source_remove(timeout_id)
+            raise capture.CaptureError("capture cancelled")
         if not box:
             raise capture.CaptureError("the portal did not answer in time")
         if box["code"] != 0:            # 1 = user cancelled, 2 = failed
@@ -195,7 +217,7 @@ class _PortalStream(capture.FrameStream):
 
 
 def open_portal_stream(output=None, fps=30,
-                       width=capture.CAPTURE_W, height=capture.CAPTURE_H):
+                       width=capture.CAPTURE_W, height=capture.CAPTURE_H, cancelled=None):
     """Negotiate with the portal and return a started FrameStream.
 
     `output` is ignored: which monitor gets shared is the user's choice in the
@@ -205,7 +227,7 @@ def open_portal_stream(output=None, fps=30,
         raise capture.CaptureError(
             "gst-launch-1.0 is needed for portal capture "
             "(install gstreamer and gst-plugins-base)")
-    session = PortalSession()
+    session = PortalSession(cancelled=cancelled)
     try:
         node_id, fd = session.start()
     except Exception:
@@ -220,6 +242,7 @@ def open_portal_stream(output=None, fps=30,
     stream = _PortalStream(cmd, width, height, 3, pass_fds=(fd,),
                            session=session, fd=fd)
     try:
+        stream.cancelled = cancelled or (lambda: False)
         stream.start()
         stream.latest(timeout=8.0)
         return stream

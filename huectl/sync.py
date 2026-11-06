@@ -18,14 +18,16 @@ CLI:
 """
 
 import sys
+import json
 import time
 import math
 import argparse
 import colorsys
+import threading
 
-from .config import load_config
+from .config import load_config, stream_lock
 from .bridge import Bridge
-from . import capture, entertainment, huestream
+from . import capture, entertainment, huestream, mapping
 from .dtls_stream import HueDTLS
 
 
@@ -96,9 +98,20 @@ class ScreenCapture(ColorSource):
 
     def __init__(self, regions=None, backend=None, output=None, fps=30,
                  saturation=1.6, gamma=1.0,
-                 width=capture.CAPTURE_W, height=capture.CAPTURE_H):
+                 width=capture.CAPTURE_W, height=capture.CAPTURE_H,
+                 mapping_profile=None, topology=None, mapping_revision=0, on_state=None, cancelled=None):
+        self.mapping_profile = mapping_profile
+        self.topology = topology
+        self.mapping_revision = mapping_revision
+        self.on_state = on_state or (lambda state: None)
+        self.cancelled = cancelled or (lambda: False)
+        self._mapping_lock = threading.Lock()
+        self._pending_mapping = None
+        self._bridge = None
+        self.frames_sent = 0
+        self.started_at = None
         self.regions = regions or []
-        self.backend = backend
+        self.backend = "portal" if output == "portal-selection" else backend
         self.output = output
         self.fps = fps
         self.saturation = saturation
@@ -107,9 +120,35 @@ class ScreenCapture(ColorSource):
         self._stream = None
         self._opened_for = None
 
+    def on_sent(self):
+        if self.started_at is None:
+            self.started_at = time.monotonic()
+        self.frames_sent += 1
+
+    def bind_bridge(self, bridge):
+        self._bridge = bridge
+
     def configure(self, config):
-        if not self.regions:
+        if self._bridge is not None and self.output:
+            self.topology = mapping.discover(self._bridge, config["id"], cancelled=self.cancelled)
+            if self.mapping_profile is None:
+                self.mapping_profile, self.mapping_revision = mapping.load_profile(
+                    load_config(), self.topology, self.output)
+            rects, _ = mapping.resolve(self.mapping_profile, self.topology)
+            self.regions = mapping.pixels(rects, self.width, self.height)
+        elif not self.regions:
             self.regions = channel_regions(config, self.width, self.height)
+
+    def queue_mapping(self, profile, revision):
+        if self.topology is None:
+            raise ValueError("Screen source is not ready")
+        rects, _ = mapping.resolve(profile, self.topology)
+        regions = mapping.pixels(rects, self.width, self.height)
+        with self._mapping_lock:
+            self._pending_mapping = (regions, revision)
+
+    def prepare(self):
+        self._open().latest()
 
     def set_output(self, output):
         """Retarget the capture while streaming.
@@ -127,10 +166,15 @@ class ScreenCapture(ColorSource):
         if self._stream is None:
             self._opened_for = self.output
             self._stream = capture.open_stream(
-                self.backend, self._opened_for, self.fps, self.width, self.height)
+                self.backend, self._opened_for, self.fps, self.width, self.height,
+                on_wait=lambda: self.on_state("waiting"), cancelled=self.cancelled)
         return self._stream
 
     def sample(self, n):
+        with self._mapping_lock:
+            if self._pending_mapping is not None:
+                self.regions, self.mapping_revision = self._pending_mapping
+                self._pending_mapping = None
         stream = self._open()
         buf = stream.latest()
         out = [capture.punch(
@@ -149,6 +193,11 @@ class ScreenCapture(ColorSource):
 
 
 def run_stream(source, config_id=None, fps=50, should_run=None):
+    with stream_lock():
+        return _run_stream(source, config_id, fps, should_run)
+
+
+def _run_stream(source, config_id=None, fps=50, should_run=None):
     """Start streaming until should_run() returns False (or Ctrl-C).
 
     should_run: optional callable returning True while streaming should continue.
@@ -168,30 +217,55 @@ def run_stream(source, config_id=None, fps=50, should_run=None):
     if config is None:
         raise RuntimeError("no entertainment area found - create one in the "
                            "official Hue app first")
+    if config.get("status") == "active":
+        raise RuntimeError("Entertainment area is in use; stop the other sync app first")
     channels = entertainment.channel_ids(config)
     if not channels:
         raise RuntimeError("the entertainment area has no channels")
 
-    source.configure(config)
-    entertainment.start(bridge, config["id"])
     dtls = HueDTLS(ip, app_key, client_key)
+    started = False
     period = 1.0 / max(1, fps)
     seq = 0
     try:
+        if hasattr(source, "bind_bridge"):
+            source.bind_bridge(bridge)
+        source.configure(config)
+        if should_run is not None and not should_run():
+            return
+        if hasattr(source, "prepare"):
+            source.prepare()
+        if should_run is not None and not should_run():
+            return
+        if hasattr(source, "on_state"):
+            source.on_state("starting")
+        entertainment.start(bridge, config["id"])
+        started = True
         dtls.connect()
+        deadline = time.monotonic()
         while should_run is None or should_run():
             colors = source.sample(len(channels))
             frame = huestream.build_rgb_frame(config["id"], zip(channels, colors), seq)
             dtls.send(frame)
+            if hasattr(source, "on_sent"):
+                source.on_sent()
+            if seq == 0 and hasattr(source, "on_state"):
+                source.on_state("running")
             seq = (seq + 1) & 0xFF
-            time.sleep(period)
+            deadline += period
+            delay = deadline - time.monotonic()
+            if delay > 0:
+                time.sleep(delay)
+            else:
+                deadline = time.monotonic()
     finally:
         dtls.close()
         source.close()
-        try:
-            entertainment.stop(bridge, config["id"])
-        except Exception:  # noqa: BLE001
-            pass
+        if started:
+            try:
+                entertainment.stop(bridge, config["id"])
+            except Exception:
+                pass
 
 
 def _list_configs():
@@ -215,30 +289,80 @@ def main():
                                 description="Philips Hue screen sync (Entertainment)")
     p.add_argument("--list", action="store_true", help="list entertainment areas")
     p.add_argument("--config", help="entertainment configuration id")
-    p.add_argument("--fps", type=int, default=50, help="frame rate (default 50)")
+    p.add_argument("--fps", type=int, help="frame rate (saved setting, otherwise 30)")
     p.add_argument("--test", action="store_true",
                    help="stream the rainbow test pattern instead of the screen")
     p.add_argument("--output", help="monitor to capture (e.g. DP-2)")
     p.add_argument("--backend", choices=sorted(capture.BACKENDS) + ["portal"],
                    help="force a capture backend")
-    p.add_argument("--saturation", type=float, default=1.6,
+    p.add_argument("--saturation", type=float,
                    help="color boost, screen averages look washed out (default 1.6)")
     p.add_argument("--gamma", type=float, default=1.0,
                    help="above 1 darkens dim scenes (default 1.0)")
+    p.add_argument("--mapping", choices=["saved", "legacy", "desk"], default="saved")
+    p.add_argument("--band-height", type=float, help="bottom band height in percent")
+    p.add_argument("--bottom-inset", type=float, help="bottom inset in percent")
+    p.add_argument("--show-mapping", action="store_true", help="print resolved regions without starting capture")
     args = p.parse_args()
+    settings = load_config()
+    args.fps = args.fps if args.fps is not None else settings.get("sync_fps", 30)
+    args.saturation = args.saturation if args.saturation is not None else settings.get("sync_saturation", 1.6)
+    if type(args.fps) is not int or not 1 <= args.fps <= 60:
+        p.error("fps must be between 1 and 60")
+    if not math.isfinite(args.saturation) or not 0 <= args.saturation <= 4:
+        p.error("saturation must be between 0 and 4")
+    if not math.isfinite(args.gamma) or not .1 <= args.gamma <= 5:
+        p.error("gamma must be between 0.1 and 5")
+    if args.test and args.show_mapping:
+        p.error("--show-mapping cannot be combined with --test")
 
     if args.list:
         return _list_configs()
 
     try:
+        profile = None
+        topology = None
+        if not args.test:
+            cfg = load_config()
+            args.output = args.output or cfg.get("sync_output")
+            if not cfg.get("bridge_ip") or not cfg.get("app_key"):
+                raise ValueError("Bridge not paired")
+            args.config = args.config or cfg.get("sync_area_id")
+            # Resolve one monitor on Hyprland; never accidentally capture all screens.
+            if not args.output:
+                import subprocess
+                try:
+                    monitors = json.loads(subprocess.check_output(
+                        ["hyprctl", "monitors", "-j"], timeout=3))
+                    args.output = next((m["name"] for m in monitors if m.get("focused")), monitors[0]["name"])
+                except (OSError, ValueError, IndexError, subprocess.SubprocessError):
+                    pass
+            args.output = args.output or "portal-selection"
+            if args.output:
+                topology = mapping.discover(Bridge(cfg["bridge_ip"], cfg["app_key"]), args.config)
+                if args.mapping == "saved":
+                    profile, _ = mapping.load_profile(cfg, topology, args.output)
+                else:
+                    profile = mapping.default_profile(topology)
+                    profile["mode"] = args.mapping
+                if args.band_height is not None:
+                    profile["height"] = args.band_height / 100
+                if args.bottom_inset is not None:
+                    profile["inset"] = args.bottom_inset / 100
+                rects, _ = mapping.resolve(profile, topology)
+                if args.show_mapping:
+                    print(json.dumps({"output": args.output, "rectangles": rects}, indent=2))
+                    return 0
+            elif args.show_mapping or args.mapping != "saved":
+                raise ValueError("Select a monitor with --output")
         if args.test:
-            print("Streaming test pattern - press Ctrl-C to stop.")
+            print("Starting test pattern - press Ctrl-C to stop.")
             source = TestColorSource()
         else:
-            print("Ambilight from the screen - press Ctrl-C to stop.")
+            print("Starting screen sync - press Ctrl-C to stop.")
             source = ScreenCapture(backend=args.backend, output=args.output,
                                    fps=args.fps, saturation=args.saturation,
-                                   gamma=args.gamma)
+                                   gamma=args.gamma, mapping_profile=profile, topology=topology)
         run_stream(source, config_id=args.config, fps=args.fps)
     except KeyboardInterrupt:
         print("\nstopped.")
