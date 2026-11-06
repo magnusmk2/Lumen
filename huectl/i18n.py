@@ -369,6 +369,17 @@ STRINGS['fr']['map_device_layout'] = 'Disposition de cet appareil'
 STRINGS['en']['map_inherit'] = 'Use selected layout'
 STRINGS['fr']['map_inherit'] = 'Utiliser la disposition choisie'
 
+STRINGS['en'].update({
+    'map_live_title': 'Live channel colours',
+    'map_live_applied': 'Current light output, from left to right. Apply mapping edits to change it.',
+    'map_live_start': 'Start screen sync to see the channels react here.',
+})
+STRINGS['fr'].update({
+    'map_live_title': 'Couleurs des canaux en direct',
+    'map_live_applied': 'Sortie lumineuse actuelle, de gauche à droite. Appliquez les modifications pour la changer.',
+    'map_live_start': 'Démarrez la synchronisation pour voir les canaux réagir ici.',
+})
+
 LANG = "en"
 
 

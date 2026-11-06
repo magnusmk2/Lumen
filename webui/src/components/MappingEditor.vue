@@ -1,8 +1,9 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import LiveChannelPreview from './LiveChannelPreview.vue'
 import { useI18n } from '../composables/useI18n.js'
 import { previewSyncMapping, saveSyncMapping, identifySyncChannel, store } from '../store/index.js'
-const props = defineProps({ data: Object })
+const props = defineProps({ data: Object, liveColors: { type: Array, default: () => [] }, liveRunning: Boolean })
 const emit = defineEmits(['close', 'saved'])
 const { t } = useI18n()
 const copy = x => JSON.parse(JSON.stringify(x))
@@ -15,7 +16,9 @@ const dialog = ref(null)
 const topo = props.data.topology
 const previousFocus = document.activeElement
 let generation = 0, previewTimer, alive = true
-const selectedChannel = computed(() => topo.channels.find(c => c.id === selected.value))
+function liveColor(id) {
+  return props.liveRunning ? props.liveColors[topo.channels.findIndex(c=>c.id===id)] : undefined
+}
 const selectedRect = computed(() => rectangles.value[String(selected.value)] || [0,0,1,1])
 const manual = computed(() => Object.hasOwn(draft.value.overrides || {}, String(selected.value)))
 const fields = computed(() => {
@@ -145,12 +148,13 @@ const fmt = v => Number.isFinite(v) ? Math.round(v*100)/100 : ''
         <div class="body">
           <p class="muted">{{ topo.name }} · {{ store.sync.output==='portal-selection' ? t('map_portal') : store.sync.output }}</p>
           <p v-if="hasMismatch" role="alert">{{ t('map_changed') }} <button @click="rebind">{{ t('map_rebind') }}</button></p>
+          <LiveChannelPreview :channels="topo.channels" :colors="liveColors" :running="liveRunning" />
           <label>{{ t('map_preset') }}<select v-model="draft.mode"><option value="legacy">{{ t('map_legacy') }}</option><option value="desk">{{ t('map_desk') }}</option></select></label>
           <div class="diagram" :style="{ aspectRatio: data.aspect || 16/9, width: 'min(100%, '+(300*(data.aspect || 16/9))+'px)' }">
             <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" :aria-label="t('map_diagram')">
               <rect width="100" height="100" fill="var(--inset)" />
               <g v-for="ch in topo.channels" :key="ch.id">
-                <rect v-if="rectangles[ch.id]?.every(Number.isFinite)" :x="rectangles[ch.id][0]*100" :y="rectangles[ch.id][1]*100" :width="(rectangles[ch.id][2]-rectangles[ch.id][0])*100" :height="(rectangles[ch.id][3]-rectangles[ch.id][1])*100" :class="{chosen:selected === ch.id}" @pointerdown="dragStart($event,ch.id)" />
+                <rect v-if="rectangles[ch.id]?.every(Number.isFinite)" :x="rectangles[ch.id][0]*100" :y="rectangles[ch.id][1]*100" :width="(rectangles[ch.id][2]-rectangles[ch.id][0])*100" :height="(rectangles[ch.id][3]-rectangles[ch.id][1])*100" :class="{chosen:selected === ch.id, live:!!liveColor(ch.id)}" :style="{'--region-color':liveColor(ch.id) || 'var(--accent)'}" @pointerdown="dragStart($event,ch.id)" />
               </g>
             </svg>
             <button v-for="ch in topo.channels" :key="'label'+ch.id" class="region-label" :class="{active:selected===ch.id}" :style="{left:((rectangles[ch.id][0]+rectangles[ch.id][2])*50)+'%',top:((rectangles[ch.id][1]+rectangles[ch.id][3])*50)+'%'}" @click="selected=ch.id" :aria-label="t('map_channel',{id:ch.id})">{{ ch.id }}</button>
@@ -195,5 +199,5 @@ const fmt = v => Number.isFinite(v) ? Math.round(v*100)/100 : ''
 <style scoped>
 .mapping-overlay{position:fixed;inset:0;z-index:100;background:var(--overlay);display:flex;align-items:flex-end;justify-content:center;color:var(--ink);font:16px 'IBM Plex Sans',sans-serif}
 .mapping-dialog{background:var(--sheet);border:1px solid var(--sheet-line);border-radius:16px 16px 0 0;width:min(700px,100%);max-height:94vh;display:flex;flex-direction:column;outline:none}
-header,footer{display:flex;gap:10px;align-items:center;padding:14px 18px;flex:none}header{justify-content:space-between;border-bottom:1px solid var(--sheet-line)}footer{border-top:1px solid var(--sheet-line)}footer span{flex:1}h2{font-size:21px;margin:0}.body{padding:0 18px 16px;overflow:auto;min-height:0}label{display:flex;flex-direction:column;gap:6px;margin:12px 0}.check{flex-direction:row;align-items:center}.check input{width:auto}input,select,button{font:inherit;color:var(--ink);background:var(--inset);border:1px solid var(--panel-line);border-radius:7px;padding:9px;min-width:0}input,select{width:100%}select{appearance:none;background:var(--inset);color:var(--ink)}option{background:var(--inset);color:var(--ink)}button{cursor:pointer;min-height:40px}button:disabled{opacity:.5;cursor:default}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.primary{background:var(--accent);color:var(--on-accent)}.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}.diagram{position:relative;border:1px solid var(--panel-line);border-radius:7px;overflow:hidden;margin-top:15px}.diagram{margin-left:auto;margin-right:auto}.region-label{position:absolute;transform:translate(-50%,-50%);padding:2px 5px;min-height:24px;font-size:13px;line-height:1;z-index:2}.diagram svg{width:100%;height:100%;display:block}.diagram g rect{fill:var(--accent);fill-opacity:.1;stroke:var(--ink-3);stroke-width:1;vector-effect:non-scaling-stroke;cursor:move}.diagram g rect.chosen{stroke:var(--accent);stroke-width:3;fill-opacity:.2}.diagram-note{position:absolute;top:8px;left:8px;font-size:12px;color:var(--ink-3);pointer-events:none}.muted{color:var(--ink-3)}.small{font-size:13px;line-height:1.5}.error{color:var(--danger)}.warning{color:var(--accent-text);font-size:14px}fieldset{border:1px solid var(--panel-line);border-radius:9px;margin:16px 0;padding:12px}legend{padding:0 5px}.channel-row,.actions{display:flex;gap:7px;align-items:center;margin:7px 0;flex-wrap:wrap}.channel-row button:first-child{flex:1;text-align:left}.active{border-color:var(--accent)}@media(max-width:420px){.two{grid-template-columns:1fr}.mapping-dialog{max-height:98vh}footer{flex-wrap:wrap}}@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+header,footer{display:flex;gap:10px;align-items:center;padding:14px 18px;flex:none}header{justify-content:space-between;border-bottom:1px solid var(--sheet-line)}footer{border-top:1px solid var(--sheet-line)}footer span{flex:1}h2{font-size:21px;margin:0}.body{padding:0 18px 16px;overflow:auto;min-height:0}label{display:flex;flex-direction:column;gap:6px;margin:12px 0}.check{flex-direction:row;align-items:center}.check input{width:auto}input,select,button{font:inherit;color:var(--ink);background:var(--inset);border:1px solid var(--panel-line);border-radius:7px;padding:9px;min-width:0}input,select{width:100%}select{appearance:none;background:var(--inset);color:var(--ink)}option{background:var(--inset);color:var(--ink)}button{cursor:pointer;min-height:40px}button:disabled{opacity:.5;cursor:default}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.primary{background:var(--accent);color:var(--on-accent)}.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}.diagram{position:relative;border:1px solid var(--panel-line);border-radius:7px;overflow:hidden;margin-top:15px}.diagram{margin-left:auto;margin-right:auto}.region-label{position:absolute;transform:translate(-50%,-50%);padding:2px 5px;min-height:24px;font-size:13px;line-height:1;z-index:2}.diagram svg{width:100%;height:100%;display:block}.diagram g rect{fill:var(--region-color,var(--accent));fill-opacity:.1;stroke:var(--ink-3);stroke-width:1;vector-effect:non-scaling-stroke;cursor:move}.diagram g rect.live{fill-opacity:.75}.diagram g rect.chosen{stroke:var(--accent);stroke-width:3;fill-opacity:.35}.diagram g rect.chosen.live{fill-opacity:.85}.diagram-note{position:absolute;top:8px;left:8px;font-size:12px;color:var(--ink-3);pointer-events:none}.muted{color:var(--ink-3)}.small{font-size:13px;line-height:1.5}.error{color:var(--danger)}.warning{color:var(--accent-text);font-size:14px}fieldset{border:1px solid var(--panel-line);border-radius:9px;margin:16px 0;padding:12px}legend{padding:0 5px}.channel-row,.actions{display:flex;gap:7px;align-items:center;margin:7px 0;flex-wrap:wrap}.channel-row button:first-child{flex:1;text-align:left}.active{border-color:var(--accent)}@media(max-width:420px){.two{grid-template-columns:1fr}.mapping-dialog{max-height:98vh}footer{flex-wrap:wrap}}@media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>

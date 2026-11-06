@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import LiveChannelPreview from '../components/LiveChannelPreview.vue'
 import MappingEditor from '../components/MappingEditor.vue'
 import DragBar from '../components/base/DragBar.vue'
 import { useI18n } from '../composables/useI18n.js'
@@ -125,16 +126,14 @@ async function setFps(n) {
       <div v-if="mappingData" class="mapping-screen" :style="{aspectRatio:mappingData.aspect || 16/9,width:'min(100%, '+(250*(mappingData.aspect || 16/9))+'px)'}">
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" :aria-label="t('map_diagram')">
           <rect width="100" height="100" fill="var(--inset)" />
-          <rect v-for="(ch,i) in sortedChannels" :key="ch.id" :x="mappingData.rectangles[ch.id][0]*100" :y="mappingData.rectangles[ch.id][1]*100" :width="(mappingData.rectangles[ch.id][2]-mappingData.rectangles[ch.id][0])*100" :height="(mappingData.rectangles[ch.id][3]-mappingData.rectangles[ch.id][1])*100" :fill="previewColors[i] || 'var(--accent)'" fill-opacity=".25" stroke="var(--ink-3)" stroke-width="1" vector-effect="non-scaling-stroke" />
+          <rect v-for="(ch,i) in sortedChannels" :key="ch.id" :x="mappingData.rectangles[ch.id][0]*100" :y="mappingData.rectangles[ch.id][1]*100" :width="(mappingData.rectangles[ch.id][2]-mappingData.rectangles[ch.id][0])*100" :height="(mappingData.rectangles[ch.id][3]-mappingData.rectangles[ch.id][1])*100" :fill="previewColors[i] || 'var(--accent)'" :fill-opacity="store.sync.state === 'running' ? .8 : .25" stroke="var(--ink-3)" stroke-width="1" vector-effect="non-scaling-stroke" />
         </svg>
       </div>
-      <div class="channel-grid" :style="{ gridTemplateColumns: `repeat(${sortedChannels.length || 1}, minmax(0,1fr))` }">
-        <div v-for="(ch,i) in sortedChannels" :key="ch.id" class="channel-cell"><div class="channel-bar" :style="{background:previewColors[i] || PLACEHOLDER}"/><div class="channel-name" :title="ch.name">{{ ch.name }} · {{ ch.id }}</div></div>
-      </div>
+      <LiveChannelPreview :channels="sortedChannels" :colors="previewColors" :running="store.sync.state === 'running'" />
       <button :disabled="!mappingData || loading || fpsBusy || toggleBusy" @click="openEditor">{{ t('map_edit') }}</button>
       <p class="note">{{ t('map_capture_note') }}</p>
     </div>
-    <MappingEditor v-if="editor && mappingData" :data="mappingData" @close="editor=false" @saved="saved" />
+    <MappingEditor v-if="editor && mappingData" :data="mappingData" :live-colors="previewColors" :live-running="store.sync.state === 'running'" @close="editor=false" @saved="saved" />
 
     <div class="card options">
       <div class="row">

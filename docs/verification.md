@@ -8,7 +8,7 @@ Review: https://github.com/magnusmk2/Lumen/pull/1
 - 38 Python tests pass.
 - 7 frontend store tests pass using Node's built-in test runner.
 - Production Vue/Vite build and Python compilation pass.
-- English/French dictionaries contain the same 210 keys.
+- English/French dictionaries contain the same 213 keys.
 - npm audit reports zero vulnerabilities after updating the lockfile.
 - Staged source was checked for the locally used bridge credentials before publication.
 
@@ -37,3 +37,7 @@ A local microbenchmark measured approximately 0.0132 ms per frame for averaging 
 No claim of zero defects follows from these checks. Physical strip direction and visible coverage still need calibration by observation. Gaming/frame-time overhead, HDR colour calibration, long-duration stability, non-Hyprland portal selection and other light hardware remain unverified. The earlier design's full 30-minute soak was not completed.
 
 No bridge area layout, device segmentation or additional independent channels were created. Manual mapping controls screen sampling within the bridge's existing channel capabilities.
+
+## Live preview follow-up
+
+Restored large live channel swatches on Sync and Edit mapping, preserving channel IDs while displaying them left to right. Diagram regions follow current output colours. Production build, 38 Python tests, 7 frontend tests and 213-key translation parity pass. The installed GTK/WebKit app was observed returning different hex colours across successive samples; its editor showed matching coloured regions. Draft/applied distinction is labelled explicitly.

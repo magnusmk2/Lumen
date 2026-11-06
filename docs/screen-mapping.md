@@ -14,6 +14,8 @@ Reported coverage uses the lengths of the Entertainment segments referenced by e
 
 A source's metadata cannot prove the visible physical lengths or which end is on the left. Use Identify segment while sync is stopped to check direction. This briefly changes the area lights at low brightness; it does not guarantee restoration of their previous state. Reverse direction or reorder channels if necessary.
 
+Live channel colours appears on both the Sync page and inside Edit mapping. Large swatches and hex values show current sampled light output in left-to-right spatial order. The diagram also uses those live colours while syncing. This is the currently applied mapping; draft edits do not change the output until Apply. Both views share the existing preview polling, with no additional capture session.
+
 The region diagram shows where colours are sampled. Its outlines match the effective rectangles; the swatches below the main diagram show sampled output colours when syncing. It is not a screenshot. On Hyprland the diagram uses the monitor aspect ratio, including rotation, with its display size constrained so portrait screens do not hide all the controls.
 
 ## Manual controls
