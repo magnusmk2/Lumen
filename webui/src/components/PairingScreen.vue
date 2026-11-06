@@ -91,11 +91,11 @@ async function onPair() {
     <FieldInput v-if="manualMode" v-model="ip" placeholder="192.168.x.x" />
 
     <div class="footer">
-      <AppButton variant="pill" @click="manualMode = !manualMode">{{ t('enter_ip_manually_btn') }}</AppButton>
-      <AppButton variant="accent" :disabled="pairing || !ip" @click="onPair">{{ t('pair') }}</AppButton>
+      <AppButton v-help="{ action: t('help_manual_ip'), reason: pairing ? t('help_busy') : t('help_ip_missing') }" variant="pill" @click="manualMode = !manualMode">{{ t('enter_ip_manually_btn') }}</AppButton>
+      <AppButton v-help="{ action: t('help_pair'), reason: pairing ? t('help_busy') : t('help_ip_missing') }" variant="accent" :disabled="pairing || !ip" @click="onPair">{{ t('pair') }}</AppButton>
     </div>
 
-    <button v-if="canCancel" type="button" class="cancel-link" @click="emit('cancel')">{{ t('cancel') }}</button>
+    <button v-help="{ action: t('help_nav_setup'), reason: pairing ? t('help_busy') : t('help_ip_missing') }" v-if="canCancel" type="button" class="cancel-link" @click="emit('cancel')">{{ t('cancel') }}</button>
   </div>
 </template>
 

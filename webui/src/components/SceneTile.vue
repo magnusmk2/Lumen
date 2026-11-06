@@ -19,7 +19,7 @@ const background = computed(() => sceneGradient(props.scene.actions, PILL_LINE))
 
 <template>
   <div class="tile" :style="{ height, background }" @click="emit('recall', scene)">
-    <button
+    <button v-help="t('help_edit')"
       v-if="showEdit"
       type="button"
       class="edit-chip"

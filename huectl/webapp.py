@@ -23,7 +23,8 @@ import webview  # noqa: E402
 from .bridge import discover_bridge_ip, load_bridge  # noqa: E402
 from .config import CONFIG_PATH, APP_NAME, load_config, save_config  # noqa: E402
 from .i18n import STRINGS  # noqa: E402
-from . import entertainment, sync  # noqa: E402
+from . import entertainment, sync, processing
+from .mapping_api import MappingAPI  # noqa: E402
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -42,6 +43,7 @@ class Api:
     """Methods exposed to the Vue app as window.pywebview.api.*"""
 
     def __init__(self):
+        self._mapping = MappingAPI()
         self._pair_state = {"status": "idle"}
         self._pair_lock = threading.Lock()
 
@@ -62,13 +64,15 @@ class Api:
             "columns": cfg.get("columns", 2),
             "language": cfg.get("language", "en"),
             "start_minimized": cfg.get("start_minimized", False),
+            "sync_area_id": cfg.get("sync_area_id"),
             "sync_output": cfg.get("sync_output", ""),
             "sync_saturation": cfg.get("sync_saturation", 1.6),
             "sync_fps": cfg.get("sync_fps", 30),
+            "sync_processing": processing.from_config(cfg),
         }
 
     def save_settings(self, patch):
-        allowed = {"columns", "language", "start_minimized", "sync_output", "sync_saturation", "sync_fps"}
+        allowed = {"columns", "language", "start_minimized", "sync_output", "sync_saturation", "sync_fps", "sync_area_id"}
         save_config({k: v for k, v in patch.items() if k in allowed})
         return {"ok": True}
 
@@ -272,7 +276,35 @@ class Api:
             return {"error": str(e)}
 
     def list_outputs(self):
-        return {"data": [m["name"] for m in _hyprctl_monitors()]}
+        return {"data": [m["name"] for m in _hyprctl_monitors()] or ["portal-selection"]}
+
+    def get_sync_mapping(self, area, output):
+        try:
+            result = self._mapping.get(area, output)
+            monitor = next((m for m in _hyprctl_monitors() if m["name"] == output), None)
+            if monitor:
+                w, h = monitor["width"], monitor["height"]
+                if monitor.get("transform", 0) % 2:
+                    w, h = h, w
+                result["aspect"] = w / h
+            return result
+        except Exception as e:
+            return {"error": str(e)}
+
+    def preview_sync_mapping(self, area, output, profile):
+        try:
+            return self._mapping.preview(area, output, profile)
+        except Exception as e:
+            return {"error": str(e)}
+
+    def save_sync_mapping(self, area, output, profile, revision):
+        try:
+            return self._mapping.save(area, output, profile, revision, web_sync)
+        except Exception as e:
+            return {"error": str(e)}
+
+    def identify_sync_channel(self, area, channel):
+        return web_sync.identify(area, channel)
 
     def start_sync(self, output, saturation, fps, config_id=None):
         return web_sync.start(output, saturation, fps, config_id)
@@ -287,6 +319,12 @@ class Api:
     def set_sync_saturation(self, saturation):
         web_sync.set_saturation(saturation)
         return {"ok": True}
+
+    def set_sync_processing(self, options):
+        try:
+            return web_sync.update_processing(options)
+        except (ValueError, OSError) as e:
+            return {"error": str(e)}
 
     def sync_status(self):
         return web_sync.status()
@@ -452,8 +490,7 @@ def _rgb_to_hex(rgb):
 
 class _PreviewCapture(sync.ScreenCapture):
     """Same as sync.ScreenCapture, stashing each sampled frame's colours for
-    the mapping card's live preview (sync_preview) - a thin subclass, not a
-    change to sync.py/capture.py."""
+    the mapping card's live preview (sync_preview)."""
 
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
@@ -467,8 +504,7 @@ class _PreviewCapture(sync.ScreenCapture):
 
 class WebSync:
     """Screen-sync session for the web UI: runs sync.run_stream in a daemon
-    thread, using sync.py/entertainment.py/capture.py unmodified. Only one
-    session at a time (a second bridge, one Entertainment stream at a time)."""
+    thread. Owns one session at a time, including channel identification."""
 
     def __init__(self):
         self._thread = None
@@ -477,19 +513,47 @@ class WebSync:
         self._error = None
         self._running = False
         self._fps = 30
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
+        self._state = "idle"
+        self._area = None
+        self._output = None
+        self._processing = None
+
+    def _state_changed(self, state):
+        with self._lock:
+            if not self._stop.is_set():
+                self._state = state
 
     def start(self, output, saturation, fps, config_id=None):
         with self._lock:
             if self._running:
                 return {"error": "already_running"}
+            if type(fps) is not int or not 1 <= fps <= 60:
+                return {"error": "Invalid frame rate"}
+            if type(saturation) not in (int, float) or not 0 <= saturation <= 4:
+                return {"error": "Invalid colour boost"}
+            try:
+                options = processing.validate({"saturation": saturation}, processing.from_config(load_config()))
+            except ValueError as e:
+                return {"error": str(e)}
+            available = {m["name"] for m in _hyprctl_monitors()} or {"portal-selection"}
+            if output and output not in available:
+                return {"error": "Selected monitor is unavailable"}
             self._stop.clear()
+            self._state = "starting"
             self._error = None
             self._fps = fps
-            resolved_output = output or _default_output()
-            self._source = _PreviewCapture(output=resolved_output, fps=fps, saturation=saturation)
+            resolved_output = output or _default_output() or "portal-selection"
+            if not resolved_output:
+                return {"error": "Select a monitor"}
+            config_id = config_id or load_config().get("sync_area_id")
+            self._area, self._output = config_id, resolved_output
+            self._processing = options
+            self._source = _PreviewCapture(output=resolved_output, fps=fps, **options,
+                                           on_state=self._state_changed, cancelled=self._stop.is_set)
             self._running = True
-        threading.Thread(target=self._run, args=(config_id,), daemon=True).start()
+        self._thread = threading.Thread(target=self._run, args=(config_id,), daemon=True)
+        self._thread.start()
         return {"ok": True}
 
     def _run(self, config_id):
@@ -498,34 +562,93 @@ class WebSync:
                              should_run=lambda: not self._stop.is_set())
         except Exception as e:
             with self._lock:
-                self._error = str(e)
+                if not self._stop.is_set():
+                    self._error = str(e)
         finally:
             with self._lock:
                 self._running = False
                 self._source = None
+                self._state = "error" if self._error else "idle"
 
     def stop(self):
+        with self._lock:
+            if self._running:
+                self._state = "stopping"
         self._stop.set()
         for _ in range(30):  # up to ~3s for the loop to notice and clean up
             with self._lock:
                 if not self._running:
                     break
             time.sleep(0.1)
-        return {"ok": True}
+        return {"ok": True, "stopping": self._running}
+
+    def shutdown(self):
+        self._stop.set()
+        thread = self._thread
+        if thread and thread is not threading.current_thread():
+            thread.join(timeout=15)
 
     def set_output(self, output):
         with self._lock:
-            if self._source:
-                self._source.set_output(output or _default_output())
+            if self._running:
+                raise ValueError("Stop sync before changing monitor")
 
     def set_saturation(self, saturation):
+        return self.update_processing({'saturation': saturation})
+
+    def update_processing(self, patch):
+        # Serialize persistence and queueing with start/stop. A failed write
+        # never changes the runtime; partial patches preserve other controls.
         with self._lock:
+            base = self._processing if self._running and self._processing is not None else processing.from_config(load_config())
+            options = processing.validate(patch, base)
+            save_config(processing.config_patch(options))
             if self._source:
-                self._source.saturation = saturation
+                self._source.queue_processing(options)
+            self._processing = options
+            return {'ok': True, 'processing': options}
 
     def status(self):
         with self._lock:
-            return {"running": self._running, "error": self._error, "fps": self._fps}
+            return {"running": self._running, "state": self._state, "error": self._error,
+                    "fps": self._fps, "area": self._area, "output": self._output,
+                    "revision": self._source.mapping_revision if self._source else None,
+                    "frames_sent": self._source.frames_sent if self._source else 0,
+                    "sampling": self._source.sampling_status if self._source else None,
+                    "processing": dict(self._source._processor.options) if self._source else self._processing}
+
+    def identify(self, area, channel):
+        with self._lock:
+            if self._running:
+                return {"error": "Stop sync before identifying a segment"}
+            if type(channel) is not int or not 0 <= channel <= 255:
+                return {"error": "Invalid channel"}
+            self._running, self._state, self._error = True, "identifying", None
+            self._stop.clear()
+            self._area, self._output = area, None
+        worker = self
+        class Identify(sync.ColorSource):
+            def configure(self, config):
+                self.ids = entertainment.channel_ids(config)
+                if channel not in self.ids:
+                    raise ValueError("Channel is not in the selected area")
+            def sample(self, n):
+                return [(40, 40, 40) if cid == channel else (0, 0, 0) for cid in self.ids]
+        def run():
+            deadline = time.monotonic() + 3
+            try:
+                sync.run_stream(Identify(), config_id=area, fps=10,
+                    should_run=lambda: not worker._stop.is_set() and time.monotonic() < deadline)
+            except Exception as e:
+                with worker._lock:
+                    worker._error = str(e)
+            finally:
+                with worker._lock:
+                    worker._running = False
+                    worker._state = "error" if worker._error else "idle"
+        self._thread = threading.Thread(target=run, daemon=True)
+        self._thread.start()
+        return {"ok": True}
 
     def preview_colors(self):
         with self._lock:
@@ -590,6 +713,11 @@ def _install_show_signal(window):
         return True
 
     GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, signal.SIGUSR2, raise_window)
+    def quit_cleanly():
+        threading.Thread(target=window._lumen_quit, daemon=True).start()
+        return False
+    GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM, quit_cleanly)
+    GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, signal.SIGINT, quit_cleanly)
 
 
 def _release_single_instance():
@@ -616,6 +744,7 @@ def _setup_tray(window):
     import pystray
 
     quitting = threading.Event()
+    quit_lock = threading.Lock()
 
     def off_main(fn):
         return lambda icon, item: threading.Thread(
@@ -635,8 +764,11 @@ def _setup_tray(window):
         _run_js(window, "window.__lumenTraySettings && window.__lumenTraySettings()")
 
     def on_quit(icon, item):
-        quitting.set()
-        web_sync.stop()
+        with quit_lock:
+            if quitting.is_set():
+                return
+            quitting.set()
+        web_sync.shutdown()
         icon.stop()
         _release_single_instance()
         window.destroy()
@@ -649,6 +781,7 @@ def _setup_tray(window):
         return False  # cancel: minimize to tray instead of exiting
 
     window.events.closing += on_closing
+    window._lumen_quit = lambda: on_quit(icon, None)
 
     menu = pystray.Menu(
         pystray.MenuItem("Open", off_main(on_open), default=True),
@@ -680,6 +813,7 @@ def main():
     try:
         webview.start(_start_sse, (window,))
     finally:
+        web_sync.shutdown()
         _release_single_instance()
 
 

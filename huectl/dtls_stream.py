@@ -48,7 +48,7 @@ class HueDTLS:
         self._proc = subprocess.Popen(
             self._cmd(), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT, bufsize=0)
-        self._reader = threading.Thread(target=self._drain, daemon=True)
+        self._reader = threading.Thread(target=self._drain, args=(self._proc,), daemon=True)
         self._reader.start()
         if not self._done.wait(timeout):
             self.close()
@@ -57,17 +57,17 @@ class HueDTLS:
             self.close()
             raise RuntimeError(self._error or "DTLS handshake failed")
 
-    def _drain(self):
+    def _drain(self, proc):
         """Watch s_client output: success = negotiated cipher name; failure =
         '(NONE)' cipher, or the process closing its output early."""
-        out = self._proc.stdout
+        out = proc.stdout
         try:
             for raw in iter(out.readline, b""):
                 text = raw.decode("utf-8", "replace")
                 if PSK_CIPHER in text:
                     self._connected = True
                     self._done.set()
-                    return
+                    continue
                 if _FAIL_MARKER in text:
                     self._error = ("DTLS handshake failed - check the client_key "
                                    "(re-pair the bridge if needed)")
@@ -95,6 +95,15 @@ class HueDTLS:
             except Exception:  # noqa: BLE001
                 try:
                     self._proc.kill()
+                    self._proc.wait(timeout=2)
                 except Exception:  # noqa: BLE001
+                    pass
+        if self._reader and self._reader is not threading.current_thread():
+            self._reader.join(timeout=.5)
+        if self._proc:
+            for pipe in (self._proc.stdin, self._proc.stdout):
+                try:
+                    pipe.close()
+                except (OSError, ValueError):
                     pass
         self._proc = None

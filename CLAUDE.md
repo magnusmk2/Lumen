@@ -76,7 +76,8 @@ Root: `pyproject.toml`, `README.md`, `LICENSE` (GPLv3),
 `bridge_ip`, `app_key` (CLIP application key = DTLS PSK identity),
 `client_key` (hex; DTLS PSK secret, from pairing), `columns`, `language`,
 `start_minimized`, and for screen sync `sync_output` (monitor name, empty =
-whole desktop), `sync_saturation`, `sync_fps`.
+whole desktop), `sync_saturation`, `sync_fps`, `sync_area_id` and `sync_mapping` (validated per-bridge/area/output profiles).
+See `docs/screen-mapping.md` and `huectl/mapping.py`; do not bypass the shared geometry validation.
 
 ## Conventions and hard rules
 
@@ -164,6 +165,7 @@ whole desktop), `sync_saturation`, `sync_fps`.
   - and `portal.py` needs a running `QGuiApplication`/D-Bus loop that this
   Qt-less process never has, so the fallback **hangs forever** instead of
   failing cleanly. Confirmed by hand; see `handoff.md`.
+- The mapping editor uses draft/apply/cancel, normalized rectangles and shared Python validation. All JS API calls remain in the store. Capture and protocol changes need failure-path tests and real GTK screenshots. GUI/CLI/Identify share a file lock; never bypass it. Monitor and area changes now require stop/start to preserve profile identity.
 - `pywebview` populates `window.pywebview` before `window.pywebview.api` is
   actually attached, and on this GTK backend the `'pywebviewready'` event
   itself has fired before `.api` was ready too. Any one-shot code that needs
@@ -212,9 +214,7 @@ whole desktop), `sync_saturation`, `sync_fps`.
   and Python ints marshal as `i` while the portal demands `u`, so every uint
   option is omitted and its default used. `session_handle` comes back a string
   but must be re-typed `QDBusObjectPath` for every later call.
-- Channel mapping uses **x only** (`-1` left to `+1` right) - z is 0 in most
-  real areas and guessing a vertical split looks worse than a full-height
-  average. Region averaging costs ~0.07 ms, irrelevant against a 20 ms budget.
+- Legacy mapping uses x only and remains the default. Configured mappings use the shared topology/region engine in `mapping.py`. Keep channel wire order separate from physical ordering. Discovery and validation stay outside the frame loop.
 
 ## Build / run / test
 
