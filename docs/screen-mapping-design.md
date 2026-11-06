@@ -12,6 +12,8 @@ The visual is a static layout concept. The implemented diagram must use the sele
 
 ## Outcome
 
+Update: [Source topology research](hue-source-topology.md) refines the Desk strip preset below. Reported segment coverage, equal widths and custom widths must be distinct choices. The initial equal-thirds example is not an assumption about physical strip coverage.
+
 Allow each Hue Entertainment channel to follow an explicit rectangle of one selected monitor. The first use case is a horizontal gradient desk strip: left, centre and right segments follow only the bottom band of the screen. Provide a quick preset, an honest visual preview and precise adjustment, while retaining Lumen's existing full-height mapping for existing users.
 
 This is a sampling feature. Capture can still acquire the whole selected monitor and downscale it before sampling; selecting a bottom band does not narrow the compositor's capture permission or guarantee lower capture/GPU cost.
