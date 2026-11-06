@@ -41,20 +41,20 @@ def discover(bridge, area_id=None, cancelled=None):
         sids = sorted(set(m['service']['rid'] for m in members))
         if not sids:
             raise ValueError('Channel has no source members')
-        pos = raw.get('position', {})
+        pos = raw.get('position') or {}
         ch = {'id': cid, 'position': pos, 'sources': sids, 'intervals': [],
               'coverage': None, 'warnings': []}
         sigmembers, names = [], []
         for sid in sids:
             service = services.get(sid, {})
-            device = devices.get(service.get('owner', {}).get('rid'), {})
-            light = lights.get(service.get('renderer_reference', {}).get('rid'), {})
-            table = service.get('segments', {}).get('segments', [])
-            pixels = light.get('gradient', {}).get('pixel_count')
-            names.append(device.get('metadata', {}).get('name', 'Unknown source'))
+            device = devices.get((service.get('owner') or {}).get('rid'), {})
+            light = lights.get((service.get('renderer_reference') or {}).get('rid'), {})
+            table = (service.get('segments') or {}).get('segments') or []
+            pixels = (light.get('gradient') or {}).get('pixel_count')
+            names.append((device.get('metadata') or {}).get('name', 'Unknown source'))
             g = groups.setdefault(sid, {'id': sid, 'name': names[-1],
                 'device_id': device.get('id'), 'channels': [], 'segments': len(table),
-                'pixels': pixels, 'palette_points': light.get('gradient', {}).get('points_capable'),
+                'pixels': pixels, 'palette_points': (light.get('gradient') or {}).get('points_capable'),
                 'coverage_available': False})
             g['channels'].append(cid)
             indices = [m.get('index') for m in members if m['service']['rid'] == sid]
@@ -105,7 +105,7 @@ def discover(bridge, area_id=None, cancelled=None):
     digest = hashlib.sha256(json.dumps([signature, area.get('locations')],
         sort_keys=True, separators=(',', ':')).encode()).hexdigest()
     return {'bridge_id': bridge_id, 'area_id': area['id'],
-        'name': area.get('metadata', {}).get('name', '?'), 'channels': channels,
+        'name': (area.get('metadata') or {}).get('name', '?'), 'channels': channels,
         'devices': list(groups.values()), 'signature': digest}
 
 

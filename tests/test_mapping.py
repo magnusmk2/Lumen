@@ -177,6 +177,17 @@ class GeometryTests(unittest.TestCase):
         self.assertEqual(mapping.resolve(self.p,self.topo)[0]['2'][1],.8)
 
 
+    def test_nullable_optional_capabilities_allow_manual_mapping(self):
+        self.bridge.data['entertainment'][0]['segments']=None
+        self.bridge.data['entertainment'][0]['renderer_reference']=None
+        self.bridge.data['light'][0]['gradient']=None
+        t=mapping.discover(self.bridge)
+        self.assertFalse(t['devices'][0]['coverage_available'])
+        p=mapping.default_profile(t);p['mode']='desk'
+        p['overrides']['0']=[0,0,1,1]
+        self.assertEqual(mapping.resolve(p,t)[0]['0'],[0,0,1,1])
+
+
 
 class PersistenceTests(unittest.TestCase):
     def setUp(self):
