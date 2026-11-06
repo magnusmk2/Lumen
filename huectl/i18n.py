@@ -512,6 +512,34 @@ STRINGS['fr'].update({
     'bars_draft': 'Sortie appliquée en direct ; le diagramme modifiable ci-dessous reste relatif à l’image.',
 })
 
+
+STRINGS['en'].update({
+    'colour_title': 'Response & colour',
+    'colour_response': 'Response time (ms)',
+    'colour_brightness': 'Brightness (%)',
+    'colour_gamma': 'Gamma',
+    'colour_saturation_help': 'Higher values make sampled colours more vivid. Zero removes colour saturation.',
+    'colour_response_help': '0 is immediate. Higher values soften changes. At this time constant, the output moves about 63% towards a new colour.',
+    'colour_brightness_help': '100% preserves the sampled brightness; lower values dim the output.',
+    'colour_gamma_help': '1 preserves the current brightness curve. Values above 1 darken dim colours; below 1 brighten them.',
+    'colour_reset': 'Reset colour controls',
+    'colour_reset_help': 'Restore colour boost 1.6, brightness 100%, gamma 1 and immediate response.',
+    'colour_live_help': 'Changes are saved and apply during sync. The live colours show processed output. Changing a control resets its response history.',
+})
+STRINGS['fr'].update({
+    'colour_title': 'Réponse et couleur',
+    'colour_response': 'Temps de réponse (ms)',
+    'colour_brightness': 'Luminosité (%)',
+    'colour_gamma': 'Gamma',
+    'colour_saturation_help': 'Une valeur élevée renforce les couleurs échantillonnées. Zéro supprime leur saturation.',
+    'colour_response_help': '0 est immédiat. Une valeur élevée adoucit les changements. Après cette durée, la sortie a parcouru environ 63 % du trajet vers une nouvelle couleur.',
+    'colour_brightness_help': '100 % conserve la luminosité échantillonnée ; une valeur inférieure réduit la sortie.',
+    'colour_gamma_help': '1 conserve la courbe actuelle. Au-dessus de 1, les couleurs sombres sont atténuées ; en dessous, elles sont éclaircies.',
+    'colour_reset': 'Réinitialiser les couleurs',
+    'colour_reset_help': 'Rétablir le renforcement à 1,6, la luminosité à 100 %, le gamma à 1 et une réponse immédiate.',
+    'colour_live_help': 'Les changements sont enregistrés et appliqués pendant la synchronisation. L’aperçu montre la sortie traitée. Modifier un réglage réinitialise l’historique de réponse.',
+})
+
 LANG = "en"
 
 

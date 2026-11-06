@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import ContentPreview from '../components/ContentPreview.vue'
 import LiveChannelPreview from '../components/LiveChannelPreview.vue'
 import MappingEditor from '../components/MappingEditor.vue'
-import DragBar from '../components/base/DragBar.vue'
+import ProcessingControls from '../components/ProcessingControls.vue'
 import { useI18n } from '../composables/useI18n.js'
 import {
   apiReady,
@@ -13,7 +13,6 @@ import {
   startSync,
   stopSync,
   setSyncOutput,
-  setSyncSaturation,
   setSyncFps,
   getSyncMapping,
   refreshSyncStatus,
@@ -26,11 +25,10 @@ const FPS_OPTIONS = [20, 25, 30, 40, 50]
 const PLACEHOLDER = 'var(--inset)'
 
 const errorMsg = ref('')
-const mappingData = ref(null), editor = ref(false), loading = ref(false), fpsBusy = ref(false), toggleBusy = ref(false)
+const mappingData = ref(null), editor = ref(false), loading = ref(false), fpsBusy = ref(false), toggleBusy = ref(false), colourBusy = ref(false)
 const canStart = computed(() => !!mappingData.value && !mappingData.value.problem && !loading.value && store.sync.outputs.includes(store.sync.output) && store.sync.areas.some(a=>a.id===store.sync.configId))
 const sortedChannels = computed(() => mappingData.value?.topology.channels || [])
 const previewColors = ref([])
-const boostPct = computed(() => Math.round((store.sync.saturation - 1) * 50))
 
 let previewTimer = null, alive = true, statusBusy = false, mapRequest = 0
 
@@ -102,10 +100,6 @@ async function reloadContext() {
 function openEditor(event) { event.currentTarget.focus(); editor.value = true }
 async function saved() { editor.value = false; await loadMapping() }
 
-function commitBoost(pct) {
-  setSyncSaturation(Math.round((1 + pct / 50) * 10) / 10)
-}
-
 async function setFps(n) {
   if (fpsBusy.value) return
   fpsBusy.value = true
@@ -121,9 +115,9 @@ async function setFps(n) {
   <div class="sync-page">
     <div class="card">
       <label class="context-label">{{ t('map_area') }}
-        <select :value="store.sync.configId" :disabled="store.sync.running || loading || fpsBusy || toggleBusy" @change="onAreaChange"><option v-if="!store.sync.areas.some(a=>a.id===store.sync.configId)" :value="store.sync.configId" disabled>{{ t('map_unavailable') }}</option><option v-for="area in store.sync.areas" :key="area.id" :value="area.id">{{ area.name }}</option></select>
+        <select :value="store.sync.configId" :disabled="store.sync.running || loading || fpsBusy || toggleBusy || colourBusy" @change="onAreaChange"><option v-if="!store.sync.areas.some(a=>a.id===store.sync.configId)" :value="store.sync.configId" disabled>{{ t('map_unavailable') }}</option><option v-for="area in store.sync.areas" :key="area.id" :value="area.id">{{ area.name }}</option></select>
       </label>
-      <div class="label-row"><span>{{ t('map_title') }}</span><button v-help="{ action: t('help_topology'), reason: loading || fpsBusy || toggleBusy ? t('help_busy') : !mappingData ? t('help_no_mapping') : mappingData.problem || t('help_display_missing') }" :disabled="loading" @click="reloadContext">{{ t('map_refresh') }}</button></div>
+      <div class="label-row"><span>{{ t('map_title') }}</span><button v-help="{ action: t('help_topology'), reason: loading || fpsBusy || toggleBusy || colourBusy ? t('help_busy') : !mappingData ? t('help_no_mapping') : mappingData.problem || t('help_display_missing') }" :disabled="loading || colourBusy" @click="reloadContext">{{ t('map_refresh') }}</button></div>
       <div v-if="mappingData" class="mapping-screen" :style="{aspectRatio:mappingData.aspect || 16/9,width:'min(100%, '+(250*(mappingData.aspect || 16/9))+'px)'}">
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" :aria-label="t('map_diagram')">
           <rect width="100" height="100" fill="var(--inset)" />
@@ -132,7 +126,7 @@ async function setFps(n) {
       </div>
       <ContentPreview :sampling="store.sync.state === 'running' ? store.sync.sampling : null" :aspect="mappingData?.aspect || 16/9" />
       <LiveChannelPreview :channels="sortedChannels" :colors="previewColors" :running="store.sync.state === 'running'" />
-      <button v-help="{ action: t('help_mapping'), reason: loading || fpsBusy || toggleBusy ? t('help_busy') : !mappingData ? t('help_no_mapping') : mappingData.problem || t('help_display_missing') }" :disabled="!mappingData || loading || fpsBusy || toggleBusy" @click="openEditor">{{ t('map_edit') }}</button>
+      <button v-help="{ action: t('help_mapping'), reason: loading || fpsBusy || toggleBusy || colourBusy ? t('help_busy') : !mappingData ? t('help_no_mapping') : mappingData.problem || t('help_display_missing') }" :disabled="!mappingData || loading || fpsBusy || toggleBusy || colourBusy" @click="openEditor">{{ t('map_edit') }}</button>
       <p class="note">{{ t('map_capture_note') }}</p>
     </div>
     <MappingEditor v-if="editor && mappingData" :data="mappingData" :live-colors="previewColors" :live-running="store.sync.state === 'running'" @close="editor=false" @saved="saved" />
@@ -140,25 +134,13 @@ async function setFps(n) {
     <div class="card options">
       <div class="row">
         <span class="label">{{ t('sync_monitor') }}</span>
-        <select class="output-select" :value="store.sync.output" :disabled="store.sync.running || loading || fpsBusy || toggleBusy" @change="onOutputChange">
+        <select class="output-select" :value="store.sync.output" :disabled="store.sync.running || loading || fpsBusy || toggleBusy || colourBusy" @change="onOutputChange">
           <option v-if="!store.sync.outputs.includes(store.sync.output)" :value="store.sync.output" disabled>{{ store.sync.output }} ({{ t('map_unavailable') }})</option>
           <option v-for="o in store.sync.outputs" :key="o" :value="o">{{ o==='portal-selection' ? t('map_portal') : o }}</option>
         </select>
       </div>
 
-      <div class="row">
-        <span class="label">{{ t('sync_saturation') }}</span>
-        <DragBar
-          class="boost-slider"
-          :model-value="boostPct"
-          fill="var(--accent)"
-          height="8px"
-          radius="4px"
-          @update:model-value="setSyncSaturation(Math.round((1 + $event / 50) * 10) / 10)"
-          @change="commitBoost"
-        />
-        <span class="boost-value">{{ store.sync.saturation.toFixed(1) }}</span>
-      </div>
+      <ProcessingControls :disabled="fpsBusy || toggleBusy || loading" @busy="colourBusy=$event" />
 
       <div class="row">
         <span class="label">{{ t('sync_fps_label') }}</span>
@@ -169,7 +151,7 @@ async function setFps(n) {
             :key="n"
             type="button"
             class="fps-chip"
-            :disabled="fpsBusy || loading || ['starting','stopping','identifying'].includes(store.sync.state)"
+            :disabled="fpsBusy || colourBusy || loading || ['starting','stopping','identifying'].includes(store.sync.state)"
             :class="{ selected: store.sync.fps === n }"
             @click="setFps(n)"
           >
@@ -179,7 +161,7 @@ async function setFps(n) {
       </div>
     </div>
 
-    <button v-help="{ action: t(store.sync.running ? 'help_stop' : 'help_start'), reason: fpsBusy || toggleBusy || loading || store.sync.state === 'stopping' ? t('help_busy') : !mappingData ? t('help_no_mapping') : mappingData.problem || t('help_display_missing') }" type="button" class="primary-action" :class="{ running: store.sync.running }" :disabled="(!store.sync.running && !canStart) || store.sync.state === 'stopping' || fpsBusy || toggleBusy" @click="onToggle">
+    <button v-help="{ action: t(store.sync.running ? 'help_stop' : 'help_start'), reason: fpsBusy || toggleBusy || colourBusy || loading || store.sync.state === 'stopping' ? t('help_busy') : !mappingData ? t('help_no_mapping') : mappingData.problem || t('help_display_missing') }" type="button" class="primary-action" :class="{ running: store.sync.running }" :disabled="(!store.sync.running && !canStart) || store.sync.state === 'stopping' || fpsBusy || toggleBusy || colourBusy" @click="onToggle">
       {{ store.sync.running ? t('sync_stop_full') : t('sync_start_full') }}
     </button>
 

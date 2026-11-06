@@ -25,3 +25,7 @@ Each stage is a separate reviewable change, with automated and real-app checks r
 ## First delivery status
 
 Stage 1 implemented and installed: per-profile automatic bars, picture-relative mapping, boundary/effective-region preview and saved CLI/GUI behavior. 54 Python tests, 11 frontend tests, production build, translation parity, dependency audit and an actual 90-second capture/bridge run passed. Detection is enabled for the current saved desk profile; the user's existing 20% inset is retained. Later stages above remain planned, not implemented or claimed verified end-to-end. See verification.md for measurement scope and limits.
+
+## Second delivery status
+
+Stage 2 implemented and installed: shared elapsed-time response, brightness/gamma and retained saturation, accessible controls in a secondary disclosure, atomic persisted parameter snapshots, processed-colour preview, and saved CLI settings/explicit overrides. 67 Python tests, 14 frontend tests, production build, 284-key parity and dependency audit pass. Native live edits, invalid-value rejection, unchanged capture process, pending-save guards and restoration of original preferences passed, with a 60-second runtime check and a 15-second final-build follow-up. Stages 3–5 remain planned. Existing colour behavior is preserved until the user changes the new controls.

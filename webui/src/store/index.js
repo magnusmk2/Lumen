@@ -20,6 +20,7 @@ export const store = reactive({
     fps: 30,
     output: '',
     saturation: 1.6,
+    processing: {saturation:1.6, brightness:1, gamma:1, response_ms:0},
     configId: null,
     channels: [], // [{ channel_id, name }]
     outputs: [],
@@ -265,7 +266,8 @@ export async function initSync(force = false) {
   store.sync.channels = store.sync.configId ? await getChannelNames(store.sync.configId) : []
   store.sync.outputs = await listOutputs()
   store.sync.output = status.running && status.output ? status.output : (cfg.sync_output || store.sync.outputs[0] || '')
-  store.sync.saturation = cfg.sync_saturation ?? 1.6
+  store.sync.processing = status.running && status.processing ? status.processing : (cfg.sync_processing || {saturation:cfg.sync_saturation ?? 1.6, brightness:1, gamma:1, response_ms:0})
+  store.sync.saturation = store.sync.processing.saturation
   store.sync.fps = status.running ? status.fps : (cfg.sync_fps ?? 30)
   store.sync.running = status.running
   store.sync.state = status.state || 'idle'
@@ -293,10 +295,24 @@ export async function setSyncOutput(output) {
   return res
 }
 
+let processingQueue = Promise.resolve()
+export function setSyncProcessing(patch) {
+  const change = {...patch}
+  const operation = processingQueue.then(async () => {
+    try {
+      const res = await api()?.set_sync_processing(change) ?? {error:'no_api'}
+      if (!res.error && res.processing) {
+        store.sync.processing = res.processing
+        store.sync.saturation = res.processing.saturation
+      }
+      return res
+    } catch (e) { return {error:String(e)} }
+  })
+  processingQueue = operation.catch(() => {})
+  return operation
+}
 export function setSyncSaturation(saturation) {
-  store.sync.saturation = saturation
-  saveSettings({ sync_saturation: saturation })
-  if (store.sync.running) api()?.set_sync_saturation(saturation)
+  return setSyncProcessing({saturation})
 }
 
 export async function setSyncFps(fps) {

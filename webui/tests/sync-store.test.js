@@ -72,3 +72,33 @@ test('sampling telemetry updates atomically and clears when the source disappear
   await refreshSyncStatus()
   assert.equal(store.sync.sampling,null)
 })
+
+test('failed processing persistence preserves visible settings', async () => {
+  const {setSyncProcessing}=await import('../src/store/index.js')
+  store.sync.processing={saturation:1.6,brightness:1,gamma:1,response_ms:0}
+  api.set_sync_processing=async()=>({error:'disk full'})
+  assert.equal((await setSyncProcessing({brightness:.5})).error,'disk full')
+  assert.equal(store.sync.processing.brightness,1)
+})
+test('rapid processing edits are serialized and preserve partial patches', async () => {
+  const {setSyncProcessing}=await import('../src/store/index.js')
+  let finish, calls=0, saved={saturation:1.6,brightness:1,gamma:1,response_ms:0}
+  api.set_sync_processing=async patch=>{
+    calls++
+    if(calls===1)await new Promise(resolve=>{finish=resolve})
+    saved={...saved,...patch};return {ok:true,processing:{...saved}}
+  }
+  const first=setSyncProcessing({response_ms:300}), second=setSyncProcessing({gamma:1.5})
+  await new Promise(resolve=>setImmediate(resolve))
+  assert.equal(calls,1)
+  finish();await Promise.all([first,second])
+  assert.equal(store.sync.processing.response_ms,300)
+  assert.equal(store.sync.processing.gamma,1.5)
+})
+test('refresh uses active processing rather than stale saved controls', async () => {
+  const options={saturation:2,brightness:.7,gamma:1.5,response_ms:250}
+  api.sync_status=async()=>({running:true,state:'running',fps:30,processing:options})
+  await initSync()
+  assert.deepEqual(JSON.parse(JSON.stringify(store.sync.processing)),options)
+  assert.equal(store.sync.saturation,2)
+})

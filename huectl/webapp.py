@@ -23,7 +23,7 @@ import webview  # noqa: E402
 from .bridge import discover_bridge_ip, load_bridge  # noqa: E402
 from .config import CONFIG_PATH, APP_NAME, load_config, save_config  # noqa: E402
 from .i18n import STRINGS  # noqa: E402
-from . import entertainment, sync
+from . import entertainment, sync, processing
 from .mapping_api import MappingAPI  # noqa: E402
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -68,6 +68,7 @@ class Api:
             "sync_output": cfg.get("sync_output", ""),
             "sync_saturation": cfg.get("sync_saturation", 1.6),
             "sync_fps": cfg.get("sync_fps", 30),
+            "sync_processing": processing.from_config(cfg),
         }
 
     def save_settings(self, patch):
@@ -319,6 +320,12 @@ class Api:
         web_sync.set_saturation(saturation)
         return {"ok": True}
 
+    def set_sync_processing(self, options):
+        try:
+            return web_sync.update_processing(options)
+        except (ValueError, OSError) as e:
+            return {"error": str(e)}
+
     def sync_status(self):
         return web_sync.status()
 
@@ -510,6 +517,7 @@ class WebSync:
         self._state = "idle"
         self._area = None
         self._output = None
+        self._processing = None
 
     def _state_changed(self, state):
         with self._lock:
@@ -524,6 +532,10 @@ class WebSync:
                 return {"error": "Invalid frame rate"}
             if type(saturation) not in (int, float) or not 0 <= saturation <= 4:
                 return {"error": "Invalid colour boost"}
+            try:
+                options = processing.validate({"saturation": saturation}, processing.from_config(load_config()))
+            except ValueError as e:
+                return {"error": str(e)}
             available = {m["name"] for m in _hyprctl_monitors()} or {"portal-selection"}
             if output and output not in available:
                 return {"error": "Selected monitor is unavailable"}
@@ -536,7 +548,8 @@ class WebSync:
                 return {"error": "Select a monitor"}
             config_id = config_id or load_config().get("sync_area_id")
             self._area, self._output = config_id, resolved_output
-            self._source = _PreviewCapture(output=resolved_output, fps=fps, saturation=saturation,
+            self._processing = options
+            self._source = _PreviewCapture(output=resolved_output, fps=fps, **options,
                                            on_state=self._state_changed, cancelled=self._stop.is_set)
             self._running = True
         self._thread = threading.Thread(target=self._run, args=(config_id,), daemon=True)
@@ -581,11 +594,19 @@ class WebSync:
                 raise ValueError("Stop sync before changing monitor")
 
     def set_saturation(self, saturation):
-        if type(saturation) not in (int, float) or not 0 <= saturation <= 4:
-            raise ValueError("Invalid colour boost")
+        return self.update_processing({'saturation': saturation})
+
+    def update_processing(self, patch):
+        # Serialize persistence and queueing with start/stop. A failed write
+        # never changes the runtime; partial patches preserve other controls.
         with self._lock:
+            base = self._processing if self._running and self._processing is not None else processing.from_config(load_config())
+            options = processing.validate(patch, base)
+            save_config(processing.config_patch(options))
             if self._source:
-                self._source.saturation = saturation
+                self._source.queue_processing(options)
+            self._processing = options
+            return {'ok': True, 'processing': options}
 
     def status(self):
         with self._lock:
@@ -593,7 +614,8 @@ class WebSync:
                     "fps": self._fps, "area": self._area, "output": self._output,
                     "revision": self._source.mapping_revision if self._source else None,
                     "frames_sent": self._source.frames_sent if self._source else 0,
-                    "sampling": self._source.sampling_status if self._source else None}
+                    "sampling": self._source.sampling_status if self._source else None,
+                    "processing": dict(self._source._processor.options) if self._source else self._processing}
 
     def identify(self, area, channel):
         with self._lock:

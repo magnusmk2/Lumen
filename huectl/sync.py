@@ -27,7 +27,7 @@ import threading
 
 from .config import load_config, stream_lock
 from .bridge import Bridge
-from . import capture, entertainment, huestream, mapping
+from . import capture, entertainment, huestream, mapping, processing
 from .dtls_stream import HueDTLS
 from .blackbars import BlackBarDetector, remap_regions
 
@@ -98,9 +98,11 @@ class ScreenCapture(ColorSource):
     """
 
     def __init__(self, regions=None, backend=None, output=None, fps=30,
-                 saturation=1.6, gamma=1.0,
+                 saturation=1.6, gamma=1.0, brightness=1.0, response_ms=0,
                  width=capture.CAPTURE_W, height=capture.CAPTURE_H,
                  mapping_profile=None, topology=None, mapping_revision=0, on_state=None, cancelled=None):
+        self._processor = processing.ColorProcessor(dict(saturation=saturation, gamma=gamma, brightness=brightness, response_ms=response_ms))
+        self._pending_processing = None
         self._bar_detector = BlackBarDetector()
         self._ignore_black_bars = bool((mapping_profile or {}).get("ignore_black_bars", False))
         self.sampling_status = None
@@ -119,8 +121,6 @@ class ScreenCapture(ColorSource):
         self.backend = "portal" if output == "portal-selection" else backend
         self.output = output
         self.fps = fps
-        self.saturation = saturation
-        self.gamma = gamma
         self.width, self.height = width, height
         self._stream = None
         self._opened_for = None
@@ -154,6 +154,11 @@ class ScreenCapture(ColorSource):
         with self._mapping_lock:
             self._pending_mapping = (regions, rects, revision, profile.get("ignore_black_bars", False))
 
+    def queue_processing(self, options):
+        options = processing.validate(options)
+        with self._mapping_lock:
+            self._pending_processing = options
+
     def prepare(self):
         self._open().latest()
 
@@ -173,6 +178,7 @@ class ScreenCapture(ColorSource):
         if self._stream is None:
             self._opened_for = self.output
             self._bar_detector.reset()
+            self._processor.reset()
             self.sampling_status = None
             self._stream = capture.open_stream(
                 self.backend, self._opened_for, self.fps, self.width, self.height,
@@ -187,6 +193,10 @@ class ScreenCapture(ColorSource):
                     self._bar_detector.reset()
                 self._ignore_black_bars = enabled
                 self._pending_mapping = None
+                self._processor.reset()
+            if self._pending_processing is not None:
+                self._processor.configure(self._pending_processing)
+                self._pending_processing = None
         stream = self._open()
         buf = stream.latest()
         crop = (0, 0, self.width, self.height)
@@ -198,10 +208,8 @@ class ScreenCapture(ColorSource):
             "crop": [crop[0]/self.width, crop[1]/self.height, crop[2]/self.width, crop[3]/self.height],
             "rectangles": {str(cid): [a/self.width, b/self.height, c/self.width, d/self.height]
                            for cid, (a,b,c,d) in regions}, "revision": self.mapping_revision}
-        out = [capture.punch(
-                   capture.region_average(buf, self.width, stream.bpp, box),
-                   self.saturation, self.gamma)
-               for _cid, box in regions[:n]]
+        out = self._processor.process([capture.region_average(buf, self.width, stream.bpp, box)
+                                       for _cid, box in regions[:n]])
         while len(out) < n:               # more channels than mapped regions
             out.append(out[-1] if out else (0, 0, 0))
         return out
@@ -212,6 +220,7 @@ class ScreenCapture(ColorSource):
             self._stream = None
         self._opened_for = None
         self._bar_detector.reset()
+        self._processor.reset()
         self.sampling_status = None
 
 
@@ -320,8 +329,10 @@ def main():
                    help="force a capture backend")
     p.add_argument("--saturation", type=float,
                    help="color boost, screen averages look washed out (default 1.6)")
-    p.add_argument("--gamma", type=float, default=1.0,
+    p.add_argument("--gamma", type=float,
                    help="above 1 darkens dim scenes (default 1.0)")
+    p.add_argument("--brightness", type=float, help="output multiplier 0..1 (saved setting, otherwise 1)")
+    p.add_argument("--response-ms", type=float, help="response time constant 0..2000 ms, 0 disables smoothing")
     p.add_argument("--mapping", choices=["saved", "legacy", "desk"], default="saved")
     p.add_argument("--band-height", type=float, help="bottom band height in percent")
     p.add_argument("--bottom-inset", type=float, help="bottom inset in percent")
@@ -330,6 +341,13 @@ def main():
     settings = load_config()
     args.fps = args.fps if args.fps is not None else settings.get("sync_fps", 30)
     args.saturation = args.saturation if args.saturation is not None else settings.get("sync_saturation", 1.6)
+    for key in ('gamma', 'brightness', 'response_ms'):
+        if getattr(args, key) is None:
+            setattr(args, key, settings.get('sync_'+key, processing.DEFAULTS[key]))
+    try:
+        processing.validate({k:getattr(args,k) for k in processing.DEFAULTS})
+    except ValueError as e:
+        p.error(str(e))
     if type(args.fps) is not int or not 1 <= args.fps <= 60:
         p.error("fps must be between 1 and 60")
     if not math.isfinite(args.saturation) or not 0 <= args.saturation <= 4:
@@ -385,7 +403,8 @@ def main():
             print("Starting screen sync - press Ctrl-C to stop.")
             source = ScreenCapture(backend=args.backend, output=args.output,
                                    fps=args.fps, saturation=args.saturation,
-                                   gamma=args.gamma, mapping_profile=profile, topology=topology)
+                                   gamma=args.gamma, brightness=args.brightness, response_ms=args.response_ms,
+                                   mapping_profile=profile, topology=topology)
         run_stream(source, config_id=args.config, fps=args.fps)
     except KeyboardInterrupt:
         print("\nstopped.")

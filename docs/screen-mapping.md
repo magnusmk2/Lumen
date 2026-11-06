@@ -101,3 +101,16 @@ When enabled, all mapping coordinates are relative to the detected picture. Bott
 The applied-picture preview shows the accepted content boundary and effective channel sampling regions. The editable diagram stays in picture-relative coordinates; its draft is applied only after Apply. Full-monitor capture still occurs; detection only changes which captured pixels contribute to the lights. No additional capture session, screenshot upload or image storage is introduced.
 
 The [upgrade plan](sync-upgrades.md) records the research and gates for later response/colour, capture and stop-behavior improvements.
+
+## Response and colour
+
+The Sync page keeps colour boost visible and puts response time, brightness and gamma under **Response & colour**. Sliders and number fields support keyboard input. Changes save when you release a slider or commit a number; they apply at the next sampling frame without restarting capture. A failed save leaves the visible saved settings and runtime unchanged. Start/FPS/context actions wait while a colour save is in progress.
+
+- **Response time:** 0 ms is immediate. Higher values soften changes using elapsed-time exponential smoothing. The value is a time constant: after that interval a steady target has moved about 63% of the way to its new colour. It is not a fixed delay or time to completion. Range 0–2000 ms.
+- **Brightness:** output multiplier, 0–100%. The default 100% preserves existing output.
+- **Gamma:** 1 preserves the brightness curve; above 1 darkens dim colours and below 1 brightens them. Range 0.1–5.
+- **Colour boost:** saturation multiplier, 0–4. Existing default 1.6 is retained.
+
+Defaults preserve the previous colour math exactly. Smoothing operates on processed RGB output and the live swatches show that same processed result. Starting/reopening capture, applying a mapping, or changing processing values resets history so old output does not leak into a new context. Setting the same values leaves history intact. No new subjective preset is selected for you; Reset colour controls restores the documented defaults.
+
+These settings are shared by the GUI and CLI. `hue-sync` loads saved values; `--brightness 0.8 --gamma 1.2 --response-ms 250` overrides them for one screen-sync run without changing the saved preferences. `--saturation` also remains available. The rainbow test source is unaffected by these screen-processing controls.
