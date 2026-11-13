@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import AppTooltip from './components/AppTooltip.vue'
 import NavRail from './components/NavRail.vue'
 import PageHeader from './components/PageHeader.vue'
 import GroupsPage from './pages/GroupsPage.vue'
@@ -153,6 +154,7 @@ async function onDeleteScene() {
 </script>
 
 <template>
+  <AppTooltip />
   <PairingScreen
     v-if="!store.configured || rePairing"
     :can-cancel="rePairing"

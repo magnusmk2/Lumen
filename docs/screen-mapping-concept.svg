@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="880" viewBox="0 0 1200 880">
+<rect width="1200" height="880" fill="#0b0d10"/>
+<style>text{font-family:'IBM Plex Sans',sans-serif;fill:#e6e6e6;font-size:16px}.muted{fill:#a2a7b0}.caption{font-size:13px;fill:#a2a7b0}.title{font-size:26px;font-weight:600}.section{font-size:19px;font-weight:600}.mono{font-family:'IBM Plex Mono',monospace;font-size:14px}.amber{fill:#f0b429}.dark{fill:#16181d}.bold{font-weight:600}</style>
+<text x="36" y="43" class="title">Lumen / screen mapping</text><text x="36" y="70" class="muted">Design concept - existing Sync page + mapping editor. Not a running application.</text>
+<rect x="28" y="94" width="480" height="730" rx="16" fill="#101216" stroke="#262a31"/>
+<rect x="28" y="94" width="62" height="730" rx="16" fill="#15181d"/>
+<text x="45" y="137" class="amber bold">L</text><text x="42" y="210" class="caption">Rooms</text><text x="42" y="258" class="caption">Scenes</text>
+<rect x="35" y="282" width="48" height="40" rx="6" fill="#2b2920"/><text x="43" y="307" class="amber caption">Sync</text>
+<text x="110" y="139" class="title">Screen sync</text>
+<text x="110" y="179" class="caption">Entertainment area</text><rect x="110" y="192" width="378" height="39" rx="7" fill="#191c22" stroke="#262a31"/><text x="124" y="217">Desk</text><text x="464" y="217" class="muted">v</text>
+<text x="110" y="259" class="caption">Monitor</text><rect x="110" y="272" width="378" height="39" rx="7" fill="#191c22" stroke="#262a31"/><text x="124" y="297">Main monitor</text><text x="464" y="297" class="muted">v</text>
+<rect x="110" y="329" width="378" height="278" rx="12" fill="#191c22" stroke="#262a31"/>
+<text x="125" y="357" class="section">Screen mapping</text><text x="125" y="382" class="caption">Desk strip / bottom 20%</text>
+<rect x="125" y="398" width="348" height="156" rx="6" fill="#12151a" stroke="#3a4049"/>
+<text x="219" y="460" class="caption">Not sampled</text>
+<rect x="125" y="523" width="116" height="31" fill="#213044" stroke="#7aa2f7"/><rect x="241" y="523" width="116" height="31" fill="#373025" stroke="#f0b429"/><rect x="357" y="523" width="116" height="31" fill="#2b273b" stroke="#bb9af7"/>
+<text x="177" y="545">1</text><text x="293" y="545">2</text><text x="409" y="545">3</text>
+<text x="125" y="584" class="amber bold">Edit mapping</text>
+<text x="110" y="642">Colour boost</text><rect x="270" y="632" width="167" height="7" rx="3" fill="#3a4049"/><rect x="270" y="632" width="100" height="7" rx="3" fill="#f0b429"/><text x="452" y="642" class="mono">1.6</text>
+<text x="110" y="680">Frame rate</text><text x="270" y="680" class="muted mono">20   25</text><rect x="348" y="660" width="42" height="30" rx="5" fill="#f0b429"/><text x="358" y="681" class="dark mono">30</text><text x="405" y="680" class="muted mono">40  50</text>
+<rect x="110" y="715" width="378" height="44" rx="9" fill="#f0b429"/><text x="256" y="743" class="dark bold">Start sync</text>
+<text x="110" y="791" class="caption">Idle / Desk strip mapping saved</text>
+
+<rect x="540" y="94" width="632" height="730" rx="16" fill="#14171c" stroke="#262a31"/>
+<text x="564" y="133" class="title">Edit screen mapping</text><text x="564" y="160" class="muted">Desk / Main monitor</text><text x="1115" y="132" class="muted">Esc</text>
+<rect x="564" y="181" width="176" height="36" rx="7" fill="#12151a" stroke="#262a31"/><text x="581" y="205">Current mapping</text>
+<rect x="749" y="181" width="176" height="36" rx="7" fill="#f0b429"/><text x="794" y="205" class="dark bold">Desk strip</text>
+<rect x="934" y="181" width="214" height="36" rx="7" fill="#12151a" stroke="#262a31"/><text x="1007" y="205">Custom</text>
+<rect x="564" y="234" width="584" height="248" rx="8" fill="#101216" stroke="#3a4049"/>
+<text x="749" y="341" class="muted">Upper screen excluded</text><text x="751" y="367" class="caption">Diagram, not a screenshot</text>
+<rect x="564" y="432" width="195" height="50" fill="#213044" stroke="#7aa2f7" stroke-width="3"/><rect x="759" y="432" width="194" height="50" fill="#373025" stroke="#f0b429"/><rect x="953" y="432" width="195" height="50" fill="#2b273b" stroke="#bb9af7"/>
+<text x="647" y="463" class="bold">1</text><text x="849" y="463">2</text><text x="1042" y="463">3</text>
+<text x="564" y="514">Band height</text><rect x="690" y="491" width="74" height="34" rx="6" fill="#12151a" stroke="#262a31"/><text x="704" y="514" class="mono">20%</text>
+<text x="805" y="514">Bottom inset</text><rect x="943" y="491" width="74" height="34" rx="6" fill="#12151a" stroke="#262a31"/><text x="961" y="514" class="mono">0%</text>
+<rect x="564" y="544" width="36" height="20" rx="10" fill="#3a4049"/><circle cx="574" cy="554" r="7" fill="#a2a7b0"/><text x="610" y="559">Reverse strip direction</text>
+<rect x="564" y="581" width="584" height="47" rx="7" fill="#1e2837" stroke="#7aa2f7"/>
+<text x="578" y="610" class="bold">1</text><text x="607" y="610">Desk strip - segment 1</text><text x="911" y="610" class="caption">Channel 2</text><text x="1048" y="610" class="amber">Identify</text>
+<text x="578" y="658">2</text><text x="607" y="658">Desk strip - segment 2</text><text x="911" y="658" class="caption">Channel 1</text>
+<text x="578" y="701">3</text><text x="607" y="701">Desk strip - segment 3</text><text x="911" y="701" class="caption">Channel 0</text>
+<path d="M564 722H1148" stroke="#262a31"/>
+<text x="564" y="750" class="caption">Bottom 20% / 3 adjacent regions / left to right</text>
+<rect x="944" y="768" width="92" height="36" rx="7" fill="#12151a" stroke="#3a4049"/><text x="963" y="792">Cancel</text>
+<rect x="1046" y="768" width="102" height="36" rx="7" fill="#f0b429"/><text x="1075" y="792" class="dark bold">Apply</text>
+<text x="36" y="858" class="caption">Custom mode adds precise Left / Top / Width / Height fields per region. Channel labels and order are illustrative.</text>
+</svg>

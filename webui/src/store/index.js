@@ -12,10 +12,20 @@ export const store = reactive({
 
   sync: {
     initialized: false,
+    sampling: null,
+    health: null,
+    finishResult: null,
+    preferences: {quality:'balanced',stop_behavior:'leave',stop_scene:null,portal_remember:false,start_on_launch:false,quit_lights_off:false},
+    stopScenes: [],
+    portal: {types:0,version:0},
+    areas: [],
+    state: "idle",
+    error: null,
     running: false,
     fps: 30,
     output: '',
     saturation: 1.6,
+    processing: {saturation:1.6, brightness:1, gamma:1, response_ms:0},
     configId: null,
     channels: [], // [{ channel_id, name }]
     outputs: [],
@@ -188,7 +198,7 @@ export async function loadConfig() {
 }
 
 export async function saveSettings(patch) {
-  await api()?.save_settings(patch)
+  return (await api()?.save_settings(patch)) ?? { error: 'no_api' }
 }
 
 export async function setBridgeIp(ip) {
@@ -250,50 +260,65 @@ export async function syncPreview() {
 }
 
 
-export async function initSync() {
-  if (store.sync.initialized) return
-  store.sync.initialized = true
-
+export async function initSync(force = false) {
+  if (store.sync.initialized && !force) return
   const cfgs = await listEntertainmentConfigs()
-  if (cfgs.data?.length) {
-    store.sync.configId = cfgs.data[0].id
-    store.sync.channels = await getChannelNames(store.sync.configId)
-  }
-  store.sync.outputs = await listOutputs()
-
+  if (cfgs.error) throw new Error(cfgs.error)
   const cfg = await loadConfig()
-  store.sync.output = cfg.sync_output || ''
-  store.sync.saturation = cfg.sync_saturation ?? 1.6
-  store.sync.fps = cfg.sync_fps ?? 30
-
   const status = await syncStatus()
+  store.sync.areas = cfgs.data || []
+  store.sync.configId = status.running && status.area ? status.area : (cfg.sync_area_id || store.sync.areas[0]?.id || null)
+  store.sync.channels = store.sync.configId ? await getChannelNames(store.sync.configId) : []
+  store.sync.outputs = await listOutputs()
+  store.sync.output = status.running && status.output ? status.output : (cfg.sync_output || store.sync.outputs[0] || '')
+  store.sync.processing = status.running && status.processing ? status.processing : (cfg.sync_processing || {saturation:cfg.sync_saturation ?? 1.6, brightness:1, gamma:1, response_ms:0})
+  store.sync.saturation = store.sync.processing.saturation
+  store.sync.fps = status.running ? status.fps : (cfg.sync_fps ?? 30)
   store.sync.running = status.running
-  if (status.running) store.sync.fps = status.fps
+  store.sync.state = status.state || 'idle'
+  store.sync.error = status.error
+  await refreshSyncPreferences()
+  store.sync.initialized = true
 }
 
 export async function startSync() {
   const { output, saturation, fps, configId } = store.sync
   const res = (await api()?.start_sync(output, saturation, fps, configId)) ?? { error: 'no_api' }
-  if (!res.error) store.sync.running = true
+  if (!res.error) { store.sync.running = true; store.sync.state = "starting" }
   return res
 }
 
 export async function stopSync() {
   const res = (await api()?.stop_sync()) ?? { error: 'no_api' }
-  store.sync.running = false
+  await refreshSyncStatus()
   return res
 }
 
-export function setSyncOutput(output) {
-  store.sync.output = output
-  saveSettings({ sync_output: output })
-  if (store.sync.running) api()?.set_sync_output(output)
+export async function setSyncOutput(output) {
+  if (store.sync.running) return { error: 'Stop sync before changing monitor' }
+  const res = await saveSettings({ sync_output: output })
+  if (!res.error) store.sync.output = output
+  return res
 }
 
+let processingQueue = Promise.resolve()
+export function setSyncProcessing(patch) {
+  const change = {...patch}
+  const operation = processingQueue.then(async () => {
+    try {
+      const res = await api()?.set_sync_processing(change) ?? {error:'no_api'}
+      if (!res.error && res.processing) {
+        store.sync.processing = res.processing
+        store.sync.saturation = res.processing.saturation
+      }
+      return res
+    } catch (e) { return {error:String(e)} }
+  })
+  processingQueue = operation.catch(() => {})
+  return operation
+}
 export function setSyncSaturation(saturation) {
-  store.sync.saturation = saturation
-  saveSettings({ sync_saturation: saturation })
-  if (store.sync.running) api()?.set_sync_saturation(saturation)
+  return setSyncProcessing({saturation})
 }
 
 export async function setSyncFps(fps) {
@@ -306,4 +331,58 @@ export async function setSyncFps(fps) {
     if (res.error) return res
   }
   return { ok: true }
+}
+
+export async function getSyncMapping() {
+  return await api()?.get_sync_mapping(store.sync.configId, store.sync.output) ?? { error: 'no_api' }
+}
+export async function previewSyncMapping(profile) {
+  return await api()?.preview_sync_mapping(store.sync.configId, store.sync.output, profile) ?? { error: 'no_api' }
+}
+export async function saveSyncMapping(profile, revision) {
+  return await api()?.save_sync_mapping(store.sync.configId, store.sync.output, profile, revision) ?? { error: 'no_api' }
+}
+export async function identifySyncChannel(channel) {
+  return await api()?.identify_sync_channel(store.sync.configId, channel) ?? { error: 'no_api' }
+}
+export async function refreshSyncStatus() {
+  const status = await syncStatus()
+  Object.assign(store.sync, { running: status.running, state: status.state || 'idle', error: status.error, sampling: status.sampling || null, health:status.health || null, finishResult:status.finish_result || null })
+  return status
+}
+export async function chooseSyncArea(id) {
+  if (store.sync.running) return { error: 'Stop sync before changing area' }
+  const channels = await getChannelNames(id)
+  const res = await saveSettings({ sync_area_id: id })
+  if (!res.error) {
+    store.sync.configId = id
+    store.sync.channels = channels
+    await refreshSyncPreferences()
+  }
+  return res
+}
+
+export async function refreshSyncPreferences(){
+  const res=await api()?.get_sync_preferences?.(store.sync.configId)
+  if(!res)return {}
+  if(!res.error){
+    store.sync.preferences=res.preferences
+    store.sync.stopScenes=res.scenes || []
+    store.sync.portal=res.portal || {types:0,version:0}
+  }
+  return res
+}
+let preferencesQueue=Promise.resolve()
+export function setSyncPreferences(patch){
+  const change={...patch}
+  const operation=preferencesQueue.then(async()=>{
+    if(store.sync.running)return {error:'Stop sync before changing capture or stop behavior'}
+    try{
+      const res=await api()?.set_sync_preferences(change) ?? {error:'no_api'}
+      if(!res.error && res.preferences)store.sync.preferences=res.preferences
+      return res
+    }catch(e){return {error:String(e)}}
+  })
+  preferencesQueue=operation.catch(()=>{})
+  return operation
 }

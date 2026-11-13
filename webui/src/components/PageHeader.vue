@@ -22,11 +22,11 @@ const { t } = useI18n()
       <div class="kicker">{{ t(HEADERS[page].kickerKey) }}</div>
       <div class="title">{{ t(HEADERS[page].titleKey) }}</div>
     </div>
-    <button v-if="HEADERS[page].addLabelKey" type="button" class="add-btn" @click="$emit('add')">
+    <button v-help="{ action: t('help_add'), reason: t('help_busy') }" v-if="HEADERS[page].addLabelKey" type="button" class="add-btn" @click="$emit('add')">
       <Icon name="plus" :size="12" />
       {{ t(HEADERS[page].addLabelKey) }}
     </button>
-    <button type="button" class="refresh-btn" @click="$emit('refresh')">
+    <button v-help="{ action: t('help_refresh'), reason: t('help_busy') }" type="button" class="refresh-btn" @click="$emit('refresh')">
       <Icon name="refresh" :size="15" />
     </button>
   </header>

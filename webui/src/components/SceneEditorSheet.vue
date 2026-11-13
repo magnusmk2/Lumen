@@ -47,10 +47,10 @@ function save() {
     <div class="note">{{ t('scene_editor_note') }}</div>
 
     <div class="footer">
-      <AppButton v-if="!isNew" variant="danger" @click="emit('delete')">{{ t('delete_btn') }}</AppButton>
+      <AppButton v-help="{ action: t('help_delete'), reason: t('help_busy') }" v-if="!isNew" variant="danger" @click="emit('delete')">{{ t('delete_btn') }}</AppButton>
       <div class="spacer" />
-      <AppButton variant="pill" @click="emit('cancel')">{{ t('cancel') }}</AppButton>
-      <AppButton variant="accent" @click="save">{{ t('save_scene_btn') }}</AppButton>
+      <AppButton v-help="{ action: t('help_cancel'), reason: t('help_busy') }" variant="pill" @click="emit('cancel')">{{ t('cancel') }}</AppButton>
+      <AppButton v-help="{ action: t('help_save'), reason: t('help_busy') }" variant="accent" @click="save">{{ t('save_scene_btn') }}</AppButton>
     </div>
   </Sheet>
 </template>

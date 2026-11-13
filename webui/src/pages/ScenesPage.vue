@@ -28,7 +28,7 @@ const BADGE = {
           {{ t(BADGE[section.kind].labelKey) }}
         </span>
         <div class="rule" />
-        <button type="button" class="new-action" @click="$emit('new-scene', section)">+ {{ t('new_label') }}</button>
+        <button v-help="{ action: t('help_new_scene'), reason: t('help_busy') }" type="button" class="new-action" @click="$emit('new-scene', section)">+ {{ t('new_label') }}</button>
       </div>
       <div class="tile-grid">
         <SceneTile

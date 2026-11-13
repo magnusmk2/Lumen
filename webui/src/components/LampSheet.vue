@@ -72,7 +72,7 @@ function onWheelDown(e) {
         <div class="meta">{{ lamp.archetype.toUpperCase() }} &middot; {{ lamp.on ? t('meta_on') : t('meta_off') }}</div>
       </div>
       <ToggleSwitch :model-value="lamp.on" @update:model-value="writeLampOn(lamp.id, $event)" />
-      <button type="button" class="close-btn" @click="emit('close')">{{ t('close') }}</button>
+      <button v-help="{ action: t('close'), reason: t('help_busy') }" type="button" class="close-btn" @click="emit('close')">{{ t('close') }}</button>
     </div>
 
     <div class="body">
@@ -107,6 +107,7 @@ function onWheelDown(e) {
           <div class="label-row"><span>{{ t('white') }}</span></div>
           <div class="whites-row">
             <button
+              v-help="{ action: t('help_white', {kelvin: Math.round(1000000 / w.mirek)}), reason: t('help_busy') }"
               v-for="w in WHITES"
               :key="w.mirek"
               type="button"

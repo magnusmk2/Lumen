@@ -30,6 +30,10 @@ class CaptureError(RuntimeError):
     """No usable backend, or the capture command died."""
 
 
+class CaptureCancelled(CaptureError):
+    """The caller requested cancellation, rather than a failed capture."""
+
+
 class FrameStream:
     """Runs a capture command and keeps only the newest frame.
 
@@ -50,6 +54,11 @@ class FrameStream:
         self._proc = None
         self._reader = None
         self._stderr = b""
+        self._frame_time = 0
+        self.cancelled = lambda: False
+        self._drainer = None
+        self.backend = None
+        self.source_size = None
 
     def start(self):
         try:
@@ -58,9 +67,19 @@ class FrameStream:
                 pass_fds=self._pass_fds)
         except FileNotFoundError as e:
             raise CaptureError(f"{self.cmd[0]} not found") from e
+        self._drainer = threading.Thread(target=self._drain_errors, daemon=True)
+        self._drainer.start()
         self._reader = threading.Thread(target=self._read, daemon=True)
         self._reader.start()
         return self
+
+    def _drain_errors(self):
+        proc = self._proc
+        try:
+            for line in iter(lambda: proc.stderr.read1(2048), b""):
+                self._stderr = (self._stderr + line)[-2048:]
+        except (OSError, ValueError):
+            pass
 
     def _read(self):
         out = self._proc.stdout
@@ -70,16 +89,23 @@ class FrameStream:
                 break
             with self._lock:
                 self._latest = buf
+                self._frame_time = time.monotonic()
 
     def latest(self, timeout=5.0):
         """Newest frame, waiting for the first one to arrive."""
         deadline = time.monotonic() + timeout
         while True:
+            if self.cancelled():
+                raise CaptureCancelled("capture cancelled")
             with self._lock:
-                if self._latest is not None:
+                if self._latest is not None and self._proc.poll() is None:
+                    if time.monotonic() - self._frame_time > timeout:
+                        raise CaptureError("capture stopped producing frames")
                     return self._latest
             if self._proc.poll() is not None:
-                err = self._proc.stderr.read().decode(errors="replace")[-400:]
+                if self._drainer:
+                    self._drainer.join(timeout=.2)
+                err = self._stderr.decode(errors="replace")[-400:]
                 raise CaptureError(f"{self.cmd[0]} exited: {err.strip()}")
             if time.monotonic() >= deadline:
                 raise CaptureError(f"no frame from {self.cmd[0]} in {timeout:g}s")
@@ -93,6 +119,14 @@ class FrameStream:
                 self._proc.wait(timeout=1.5)
             except subprocess.TimeoutExpired:
                 self._proc.kill()
+                self._proc.wait(timeout=2)
+        for thread in (self._reader, self._drainer):
+            if thread and thread is not threading.current_thread():
+                thread.join(timeout=.5)
+        if self._proc:
+            for pipe in (self._proc.stdout, self._proc.stderr):
+                if pipe:
+                    pipe.close()
 
 
 # -- pixel math ------------------------------------------------------------
@@ -188,7 +222,7 @@ def pick_backend(name=None, output=None, fps=30,
 
 
 def open_stream(name=None, output=None, fps=30,
-                width=CAPTURE_W, height=CAPTURE_H):
+                width=CAPTURE_W, height=CAPTURE_H, on_wait=None, cancelled=None):
     """Start capturing, falling back to the portal when no fast path fits.
 
     Returns a started FrameStream. The caller closes it.
@@ -197,19 +231,23 @@ def open_stream(name=None, output=None, fps=30,
     fast_error = None
     if spec is not None:
         stream = FrameStream(spec["cmd"], width, height, spec["bpp"]).start()
+        stream.backend = spec["backend"]
+        stream.cancelled = cancelled or (lambda: False)
         try:
             stream.latest(timeout=6.0)     # prove it really produces frames
             return stream
         except CaptureError as e:
             stream.close()
-            if name:                        # explicit choice: do not second-guess
+            if name or (cancelled and cancelled()):  # explicit choice or cancellation
                 raise
             fast_error = e
     if name and name != "portal":
         raise CaptureError(f"backend '{name}' is not available here")
+    if on_wait:
+        on_wait()
     from .portal import open_portal_stream   # imported late: needs GDBus (PyGObject)
     try:
-        return open_portal_stream(output, fps, width, height)
+        return open_portal_stream(output, fps, width, height, cancelled=cancelled)
     except CaptureError as e:
         # report both, or the fast path's real reason stays invisible behind a
         # generic portal message
