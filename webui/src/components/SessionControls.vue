@@ -22,6 +22,10 @@ async function save(patch){
   <details class="session-controls">
     <summary>{{ t('session_title') }}</summary>
     <p class="help">{{ store.sync.running ? t('session_stop_first') : t('session_help') }}</p>
+    <label class="check"><input id="sync-on-launch" v-model="draft.start_on_launch" type="checkbox" :disabled="unavailable" aria-describedby="sync-on-launch-help" @change="save({start_on_launch:draft.start_on_launch})" />{{ t('sync_on_launch') }}</label>
+    <p id="sync-on-launch-help" class="help">{{ t('sync_on_launch_help') }}</p>
+    <label class="check"><input id="quit-lights-off" v-model="draft.quit_lights_off" type="checkbox" :disabled="unavailable" aria-describedby="quit-lights-off-help" @change="save({quit_lights_off:draft.quit_lights_off})" />{{ t('quit_lights_off') }}</label>
+    <p id="quit-lights-off-help" class="help">{{ t('quit_lights_off_help') }}</p>
     <label>{{ t('capture_quality') }}
       <select id="capture-quality" v-model="draft.quality" :disabled="unavailable" @change="save({quality:draft.quality})">
         <option value="economy">{{ t('quality_economy') }}</option><option value="balanced">{{ t('quality_balanced') }}</option><option value="detailed">{{ t('quality_detailed') }}</option>

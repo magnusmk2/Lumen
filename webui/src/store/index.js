@@ -15,7 +15,7 @@ export const store = reactive({
     sampling: null,
     health: null,
     finishResult: null,
-    preferences: {quality:'balanced',stop_behavior:'leave',stop_scene:null,portal_remember:false},
+    preferences: {quality:'balanced',stop_behavior:'leave',stop_scene:null,portal_remember:false,start_on_launch:false,quit_lights_off:false},
     stopScenes: [],
     portal: {types:0,version:0},
     areas: [],

@@ -542,6 +542,10 @@ STRINGS['fr'].update({
 
 
 STRINGS['en'].update({
+    'sync_on_launch': 'Start sync when Lumen launches',
+    'sync_on_launch_help': 'Uses your saved Entertainment area, monitor and sync settings. Portal capture may ask you to choose a source. Does not enable desktop login autostart. Stop sync to change this option.',
+    'quit_lights_off': 'Turn off Entertainment lights when Lumen quits',
+    'quit_lights_off_help': 'On tray Quit, turns off only the saved Entertainment area, even if sync is idle. Runs after the normal stop behavior. Closing to the tray or forced termination does not turn lights off. Skips lights used by another active stream. Stop sync to change this option.',
     'session_title': 'Capture & finishing',
     'session_help': 'Choose capture quality and what happens after a graceful stop.',
     'session_stop_first': 'Stop sync before changing capture or finishing preferences.',
@@ -581,6 +585,10 @@ STRINGS['en'].update({
     'finish_reason_interrupted': 'The stream did not end gracefully.',
 })
 STRINGS['fr'].update({
+    'sync_on_launch': 'Synchroniser au lancement de Lumen',
+    'sync_on_launch_help': 'Utilise la zone de divertissement, l’écran et les réglages enregistrés. Le portail peut demander une source. N’active pas le démarrage à la connexion. Arrêtez la synchronisation pour modifier cette option.',
+    'quit_lights_off': 'Éteindre les lumières de divertissement en quittant Lumen',
+    'quit_lights_off_help': 'Quitter depuis la zone de notification éteint uniquement la zone enregistrée, même sans synchronisation, après le comportement de fin habituel. La fermeture vers la zone de notification et l’arrêt forcé ne les éteignent pas. Ignore les lumières utilisées par un autre flux actif. Arrêtez la synchronisation pour modifier cette option.',
     'session_title': 'Capture et fin de synchronisation',
     'session_help': 'Choisir la qualité de capture et le comportement après un arrêt normal.',
     'session_stop_first': 'Arrêtez la synchronisation avant de modifier ces préférences.',

@@ -557,6 +557,7 @@ class WebSync:
         self._output = None
         self._processing = None
         self._finish_result = None
+        self._shutting_down = False
 
     def _state_changed(self, state):
         with self._lock:
@@ -565,6 +566,8 @@ class WebSync:
 
     def start(self, output, saturation, fps, config_id=None):
         with self._lock:
+            if self._shutting_down:
+                return {"error": "Application is quitting"}
             if self._running:
                 return {"error": "already_running"}
             if type(fps) is not int or not 1 <= fps <= 60:
@@ -596,8 +599,8 @@ class WebSync:
                                            on_state=self._state_changed, cancelled=self._stop.is_set)
             self._source.finish_preferences = prefs
             self._running = True
-        self._thread = threading.Thread(target=self._run, args=(config_id,), daemon=True)
-        self._thread.start()
+            self._thread = threading.Thread(target=self._run, args=(config_id,), daemon=True)
+            self._thread.start()
         return {"ok": True}
 
     def _run(self, config_id):
@@ -627,8 +630,23 @@ class WebSync:
             time.sleep(0.1)
         return {"ok": True, "stopping": self._running}
 
-    def shutdown(self, graceful=False):
+    def start_on_launch(self):
+        """One attempt per application launch, using the saved sync selection."""
+        cfg=load_config()
+        try:
+            if not preferences.from_config(cfg)['start_on_launch']:return
+            if not all(cfg.get(k) for k in ('bridge_ip','app_key','client_key','sync_area_id')):
+                raise ValueError('Choose an Entertainment area and pair the bridge before automatic sync')
+            result=self.start(cfg.get('sync_output'),cfg.get('sync_saturation',1.6),cfg.get('sync_fps',30),cfg['sync_area_id'])
+            if result.get('error'):raise ValueError(result['error'])
+        except Exception as e:
+            with self._lock:
+                self._error=str(e)
+                self._state='error'
+
+    def shutdown(self, graceful=False, quitting=False):
         with self._lock:
+            self._shutting_down = True
             if self._source:self._source.finish_allowed = graceful
         self._stop.set()
         thread = self._thread
@@ -638,6 +656,16 @@ class WebSync:
                 with self._lock:
                     if self._source:self._source.finish_allowed = False
                 print('Lumen: shutdown timed out; further finishing requests cancelled.', file=sys.stderr)
+                return
+        if graceful and quitting:
+            try:
+                cfg=load_config()
+                if preferences.from_config(cfg)['quit_lights_off']:
+                    result=finishing.turn_off_area(load_bridge(),cfg.get('sync_area_id'))
+                    if result['status']!='applied':
+                        print(f'Lumen: quit lights off {result["status"]}: {result["reason"]}',file=sys.stderr)
+            except Exception as e:
+                print(f'Lumen: could not turn off Entertainment lights on quit: {e}',file=sys.stderr)
 
     def set_output(self, output):
         with self._lock:
@@ -730,6 +758,11 @@ def _run_js(window, script):
 
 def _push(window, payload):
     _run_js(window, f"window.__lumenSSE && window.__lumenSSE({json.dumps(payload)})")
+
+
+def _start_application(window):
+    _start_sse(window)
+    web_sync.start_on_launch()
 
 
 def _start_sse(window):
@@ -832,7 +865,7 @@ def _setup_tray(window):
             if quitting.is_set():
                 return
             quitting.set()
-        web_sync.shutdown(graceful=graceful)
+        web_sync.shutdown(graceful=graceful, quitting=True)
         icon.stop()
         _release_single_instance()
         window.destroy()
@@ -875,7 +908,7 @@ def main():
     _setup_tray(window)
     _install_show_signal(window)
     try:
-        webview.start(_start_sse, (window,))
+        webview.start(_start_application, (window,))
     finally:
         web_sync.shutdown()
         _release_single_instance()

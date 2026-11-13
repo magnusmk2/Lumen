@@ -152,3 +152,61 @@ class PreferenceTests(unittest.TestCase):
     def test_invalid_preferences_are_rejected(self):
         for value in [{'quality':[]},{'stop_behavior':'x'},{'portal_remember':1},{'stop_behavior':'scene'},{'stop_scene':''},{'extra':True}]:
             with self.assertRaises(ValueError):preferences.validate(value)
+
+
+class ApplicationLifecycleTests(unittest.TestCase):
+    def test_off_targets_only_selected_area_and_minimal_payload(self):
+        b=Bridge();b.data['light'].append({'id':'unrelated'})
+        result=finishing.turn_off_area(b,b.data['entertainment_configuration'][0]['id'])
+        self.assertEqual(result,{'status':'applied','reason':'off'})
+        self.assertEqual(b.writes,[('light','light',{'on':{'on':False}})])
+
+    def test_off_missing_selection_or_active_overlap_does_not_write(self):
+        for selection in (None,'missing'):
+            b=Bridge();self.assertEqual(finishing.turn_off_area(b,selection)['status'],'skipped');self.assertFalse(b.writes)
+        b=Bridge();area=b.data['entertainment_configuration'][0]
+        other=copy.deepcopy(area);other.update(id='other',status='active')
+        b.data['entertainment_configuration'].append(other)
+        self.assertEqual(finishing.turn_off_area(b,area['id'])['reason'],'ownership');self.assertFalse(b.writes)
+
+    def test_off_rechecks_ownership_between_lights(self):
+        b=Bridge();area=b.data['entertainment_configuration'][0]
+        area['light_services'].append({'rid':'z','rtype':'light'})
+        original=b.put
+        def takeover(*args):
+            original(*args);area['status']='active'
+        b.put=takeover
+        self.assertEqual(finishing.turn_off_area(b,area['id']),{'status':'partial','reason':'ownership'})
+        self.assertEqual(len(b.writes),1)
+
+    def test_launch_defaults_and_saved_selection_and_failures(self):
+        from huectl import webapp
+        worker=webapp.WebSync()
+        cfg={'bridge_ip':'ip','app_key':'key','client_key':'client','sync_area_id':'area','sync_output':'DP-3','sync_fps':24,'sync_saturation':1.2}
+        with patch.object(webapp,'load_config',return_value=cfg),patch.object(worker,'start') as start:
+            worker.start_on_launch();start.assert_not_called()
+            cfg['sync_start_on_launch']=True;start.return_value={'ok':True}
+            worker.start_on_launch();start.assert_called_once_with('DP-3',1.2,24,'area')
+            start.return_value={'error':'Selected monitor is unavailable'}
+            worker.start_on_launch();self.assertEqual(worker.status()['error'],'Selected monitor is unavailable')
+            del cfg['sync_area_id'];start.reset_mock()
+            worker.start_on_launch();start.assert_not_called()
+            self.assertIn('Choose an Entertainment area',worker.status()['error'])
+
+    def test_quit_only_after_worker_exit_and_never_for_signals(self):
+        from huectl import webapp
+        cfg={'sync_quit_lights_off':True,'sync_area_id':'area'}
+        with patch.object(webapp,'load_config',return_value=cfg),patch.object(webapp,'load_bridge',return_value='bridge'),patch.object(finishing,'turn_off_area',return_value={'status':'applied'}) as off:
+            webapp.WebSync().shutdown(graceful=True);off.assert_not_called()
+            webapp.WebSync().shutdown(quitting=True);off.assert_not_called()
+            worker=webapp.WebSync();worker.shutdown(graceful=True,quitting=True)
+            off.assert_called_once_with('bridge','area')
+            self.assertIn('quitting',worker.start(None,1.6,30)['error'])
+            off.reset_mock();worker=webapp.WebSync();worker._thread=Mock();worker._thread.is_alive.return_value=True
+            worker.shutdown(graceful=True,quitting=True);off.assert_not_called()
+
+    def test_new_flags_require_real_booleans(self):
+        for key in ('start_on_launch','quit_lights_off'):
+            for value in (1,'true',None):
+                with self.assertRaises(ValueError):preferences.validate({key:value})
+            self.assertTrue(preferences.validate({key:True})[key])

@@ -102,3 +102,28 @@ class FinishSession:
                     raise RuntimeError(f'Restore failed after {written} light request(s): {e}') from e
                 written+=1
         return {'status':'applied','reason':self.options['stop_behavior']}
+
+
+def turn_off_area(bridge, area_id):
+    """Explicit application quit: target only a saved, currently idle area.
+
+    No fallback to the first area: a missing selection must never turn off
+    unrelated lights. Recheck overlapping streams before every request.
+    """
+    if not bridge or not area_id:
+        return {'status':'skipped','reason':'no_area'}
+    area=next((a for a in bridge.get('entertainment_configuration') if a['id']==area_id),None)
+    if not area:return {'status':'skipped','reason':'no_area'}
+    ids=light_ids(bridge,area)
+    if not ids:return {'status':'skipped','reason':'no_lights'}
+    written=0
+    for rid in sorted(ids):
+        areas=bridge.get('entertainment_configuration')
+        current=next((a for a in areas if a['id']==area_id),None)
+        if not current or light_ids(bridge,current)!=ids:
+            return {'status':'partial' if written else 'skipped','reason':'changed'}
+        if any(a.get('status')=='active' and light_ids(bridge,a)&ids for a in areas):
+            return {'status':'partial' if written else 'skipped','reason':'ownership'}
+        bridge.put('light',rid,{'on':{'on':False}})
+        written+=1
+    return {'status':'applied','reason':'off'}
