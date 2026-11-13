@@ -147,10 +147,10 @@ const fmt = v => Number.isFinite(v) ? Math.round(v*100)/100 : ''
       <section ref="dialog" class="mapping-dialog" role="dialog" aria-modal="true" aria-labelledby="mapping-title" tabindex="-1" @keydown="onKey">
         <header><h2 id="mapping-title">{{ t('map_title') }}</h2><button v-help="{ action: t('help_close'), reason: saving ? t('help_saving') : '' }" :disabled="saving" @click="emit('close')">{{ t('map_cancel') }}</button></header>
         <div class="body">
-          <p class="muted">{{ topo.name }} · {{ store.sync.output==='portal-selection' ? t('map_portal') : store.sync.output }}</p>
+          <p class="muted">{{ topo.name }} · {{ ['portal-selection','portal-window'].includes(store.sync.output) ? t('map_portal') : store.sync.output }}</p>
           <p v-if="hasMismatch" role="alert">{{ t('map_changed') }} <button v-help="{ action: t('help_rebind'), reason: saving ? t('help_saving') : '' }" @click="rebind">{{ t('map_rebind') }}</button></p>
           <LiveChannelPreview :channels="topo.channels" :colors="liveColors" :running="liveRunning" />
-          <ContentPreview draft-note :sampling="liveRunning ? store.sync.sampling : null" :aspect="data.aspect || 16/9" />
+          <ContentPreview :colors="liveColors" :channels="topo.channels" draft-note :sampling="liveRunning ? store.sync.sampling : null" :aspect="data.aspect || 16/9" />
           <label class="check"><input v-model="draft.ignore_black_bars" type="checkbox" aria-describedby="black-bar-help" />{{ t('bars_enable') }}</label>
           <p id="black-bar-help" class="muted small">{{ t('bars_help') }}</p>
           <label>{{ t('map_preset') }}<select v-model="draft.mode"><option value="legacy">{{ t('map_legacy') }}</option><option value="desk">{{ t('map_desk') }}</option></select></label>

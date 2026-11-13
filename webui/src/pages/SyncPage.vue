@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import ContentPreview from '../components/ContentPreview.vue'
 import LiveChannelPreview from '../components/LiveChannelPreview.vue'
 import MappingEditor from '../components/MappingEditor.vue'
+import SessionControls from '../components/SessionControls.vue'
 import ProcessingControls from '../components/ProcessingControls.vue'
 import { useI18n } from '../composables/useI18n.js'
 import {
@@ -25,7 +26,7 @@ const FPS_OPTIONS = [20, 25, 30, 40, 50]
 const PLACEHOLDER = 'var(--inset)'
 
 const errorMsg = ref('')
-const mappingData = ref(null), editor = ref(false), loading = ref(false), fpsBusy = ref(false), toggleBusy = ref(false), colourBusy = ref(false)
+const mappingData = ref(null), editor = ref(false), loading = ref(false), fpsBusy = ref(false), toggleBusy = ref(false), colourBusy = ref(false), sessionBusy = ref(false)
 const canStart = computed(() => !!mappingData.value && !mappingData.value.problem && !loading.value && store.sync.outputs.includes(store.sync.output) && store.sync.areas.some(a=>a.id===store.sync.configId))
 const sortedChannels = computed(() => mappingData.value?.topology.channels || [])
 const previewColors = ref([])
@@ -115,18 +116,18 @@ async function setFps(n) {
   <div class="sync-page">
     <div class="card">
       <label class="context-label">{{ t('map_area') }}
-        <select :value="store.sync.configId" :disabled="store.sync.running || loading || fpsBusy || toggleBusy || colourBusy" @change="onAreaChange"><option v-if="!store.sync.areas.some(a=>a.id===store.sync.configId)" :value="store.sync.configId" disabled>{{ t('map_unavailable') }}</option><option v-for="area in store.sync.areas" :key="area.id" :value="area.id">{{ area.name }}</option></select>
+        <select :value="store.sync.configId" :disabled="store.sync.running || loading || fpsBusy || toggleBusy || colourBusy || sessionBusy" @change="onAreaChange"><option v-if="!store.sync.areas.some(a=>a.id===store.sync.configId)" :value="store.sync.configId" disabled>{{ t('map_unavailable') }}</option><option v-for="area in store.sync.areas" :key="area.id" :value="area.id">{{ area.name }}</option></select>
       </label>
-      <div class="label-row"><span>{{ t('map_title') }}</span><button v-help="{ action: t('help_topology'), reason: loading || fpsBusy || toggleBusy || colourBusy ? t('help_busy') : !mappingData ? t('help_no_mapping') : mappingData.problem || t('help_display_missing') }" :disabled="loading || colourBusy" @click="reloadContext">{{ t('map_refresh') }}</button></div>
-      <div v-if="mappingData" class="mapping-screen" :style="{aspectRatio:mappingData.aspect || 16/9,width:'min(100%, '+(250*(mappingData.aspect || 16/9))+'px)'}">
+      <div class="label-row"><span>{{ t('map_title') }}</span><button v-help="{ action: t('help_topology'), reason: loading || fpsBusy || toggleBusy || colourBusy || sessionBusy ? t('help_busy') : !mappingData ? t('help_no_mapping') : mappingData.problem || t('help_display_missing') }" :disabled="loading || colourBusy || sessionBusy" @click="reloadContext">{{ t('map_refresh') }}</button></div>
+      <div v-if="mappingData && store.sync.state !== 'running'" class="mapping-screen" :style="{aspectRatio:mappingData.aspect || 16/9,width:'min(100%, '+(250*(mappingData.aspect || 16/9))+'px)'}">
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" :aria-label="t('map_diagram')">
           <rect width="100" height="100" fill="var(--inset)" />
           <rect v-for="(ch,i) in sortedChannels" :key="ch.id" :x="mappingData.rectangles[ch.id][0]*100" :y="mappingData.rectangles[ch.id][1]*100" :width="(mappingData.rectangles[ch.id][2]-mappingData.rectangles[ch.id][0])*100" :height="(mappingData.rectangles[ch.id][3]-mappingData.rectangles[ch.id][1])*100" :fill="previewColors[i] || 'var(--accent)'" :fill-opacity="store.sync.state === 'running' ? .8 : .25" stroke="var(--ink-3)" stroke-width="1" vector-effect="non-scaling-stroke" />
         </svg>
       </div>
-      <ContentPreview :sampling="store.sync.state === 'running' ? store.sync.sampling : null" :aspect="mappingData?.aspect || 16/9" />
+      <ContentPreview :colors="previewColors" :channels="sortedChannels" :sampling="store.sync.state === 'running' ? store.sync.sampling : null" :aspect="store.sync.health?.source_size ? store.sync.health.source_size[0]/store.sync.health.source_size[1] : mappingData?.aspect || 16/9" />
       <LiveChannelPreview :channels="sortedChannels" :colors="previewColors" :running="store.sync.state === 'running'" />
-      <button v-help="{ action: t('help_mapping'), reason: loading || fpsBusy || toggleBusy || colourBusy ? t('help_busy') : !mappingData ? t('help_no_mapping') : mappingData.problem || t('help_display_missing') }" :disabled="!mappingData || loading || fpsBusy || toggleBusy || colourBusy" @click="openEditor">{{ t('map_edit') }}</button>
+      <button v-help="{ action: t('help_mapping'), reason: loading || fpsBusy || toggleBusy || colourBusy || sessionBusy ? t('help_busy') : !mappingData ? t('help_no_mapping') : mappingData.problem || t('help_display_missing') }" :disabled="!mappingData || loading || fpsBusy || toggleBusy || colourBusy || sessionBusy" @click="openEditor">{{ t('map_edit') }}</button>
       <p class="note">{{ t('map_capture_note') }}</p>
     </div>
     <MappingEditor v-if="editor && mappingData" :data="mappingData" :live-colors="previewColors" :live-running="store.sync.state === 'running'" @close="editor=false" @saved="saved" />
@@ -134,13 +135,14 @@ async function setFps(n) {
     <div class="card options">
       <div class="row">
         <span class="label">{{ t('sync_monitor') }}</span>
-        <select class="output-select" :value="store.sync.output" :disabled="store.sync.running || loading || fpsBusy || toggleBusy || colourBusy" @change="onOutputChange">
+        <select class="output-select" :value="store.sync.output" :disabled="store.sync.running || loading || fpsBusy || toggleBusy || colourBusy || sessionBusy" @change="onOutputChange">
           <option v-if="!store.sync.outputs.includes(store.sync.output)" :value="store.sync.output" disabled>{{ store.sync.output }} ({{ t('map_unavailable') }})</option>
-          <option v-for="o in store.sync.outputs" :key="o" :value="o">{{ o==='portal-selection' ? t('map_portal') : o }}</option>
+          <option v-for="o in store.sync.outputs" :key="o" :value="o">{{ o==='portal-selection' ? t('map_portal') : o==='portal-window' ? t('capture_window') : o }}</option>
         </select>
       </div>
 
-      <ProcessingControls :disabled="fpsBusy || toggleBusy || loading" @busy="colourBusy=$event" />
+      <SessionControls :disabled="loading || fpsBusy || toggleBusy || colourBusy" @busy="sessionBusy=$event" />
+      <ProcessingControls :disabled="fpsBusy || toggleBusy || loading || sessionBusy" @busy="colourBusy=$event" />
 
       <div class="row">
         <span class="label">{{ t('sync_fps_label') }}</span>
@@ -151,7 +153,7 @@ async function setFps(n) {
             :key="n"
             type="button"
             class="fps-chip"
-            :disabled="fpsBusy || colourBusy || loading || ['starting','stopping','identifying'].includes(store.sync.state)"
+            :disabled="fpsBusy || colourBusy || sessionBusy || loading || ['starting','stopping','finishing','identifying'].includes(store.sync.state)"
             :class="{ selected: store.sync.fps === n }"
             @click="setFps(n)"
           >
@@ -161,11 +163,17 @@ async function setFps(n) {
       </div>
     </div>
 
-    <button v-help="{ action: t(store.sync.running ? 'help_stop' : 'help_start'), reason: fpsBusy || toggleBusy || colourBusy || loading || store.sync.state === 'stopping' ? t('help_busy') : !mappingData ? t('help_no_mapping') : mappingData.problem || t('help_display_missing') }" type="button" class="primary-action" :class="{ running: store.sync.running }" :disabled="(!store.sync.running && !canStart) || store.sync.state === 'stopping' || fpsBusy || toggleBusy || colourBusy" @click="onToggle">
+    <button v-help="{ action: t(store.sync.running ? 'help_stop' : 'help_start'), reason: fpsBusy || toggleBusy || colourBusy || sessionBusy || loading || ['stopping','finishing'].includes(store.sync.state) ? t('help_busy') : !mappingData ? t('help_no_mapping') : mappingData.problem || t('help_display_missing') }" type="button" class="primary-action" :class="{ running: store.sync.running }" :disabled="(!store.sync.running && !canStart) || ['stopping','finishing'].includes(store.sync.state) || fpsBusy || toggleBusy || colourBusy || sessionBusy" @click="onToggle">
       {{ store.sync.running ? t('sync_stop_full') : t('sync_start_full') }}
     </button>
 
-    <div v-if="errorMsg" class="error">{{ errorMsg }}</div>
+    <div v-if="errorMsg || store.sync.error" class="error" role="alert">{{ errorMsg || store.sync.error }}</div>
+    <div v-if="store.sync.health" class="note capture-health">
+      {{ t('health_capture',{backend:store.sync.health.backend || '—',size:store.sync.health.size.join(' × ')}) }} ·
+      {{ t('health_fps',{fps:store.sync.health.sent_fps ?? '—',target:store.sync.fps}) }} ·
+      {{ t('health_age',{age:store.sync.health.frame_age_ms ?? '—'}) }}
+    </div>
+    <div v-if="store.sync.finishResult" class="note" role="status">{{ t('finish_'+store.sync.finishResult.status) }} {{ store.sync.finishResult.status==='error' ? store.sync.finishResult.reason : t('finish_reason_'+store.sync.finishResult.reason) }}</div>
     <div class="note" role="status" aria-live="polite">{{ t('map_state_'+store.sync.state) }}</div>
   </div>
 </template>

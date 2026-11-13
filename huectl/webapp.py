@@ -21,9 +21,9 @@ os.environ.setdefault("WEBKIT_DISABLE_DMABUF_RENDERER", "1")
 import webview  # noqa: E402
 
 from .bridge import discover_bridge_ip, load_bridge  # noqa: E402
-from .config import CONFIG_PATH, APP_NAME, load_config, save_config  # noqa: E402
+from .config import CONFIG_PATH, APP_NAME, load_config, save_config, update_config  # noqa: E402
 from .i18n import STRINGS  # noqa: E402
-from . import entertainment, sync, processing
+from . import entertainment, sync, processing, preferences, finishing
 from .mapping_api import MappingAPI  # noqa: E402
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -276,7 +276,33 @@ class Api:
             return {"error": str(e)}
 
     def list_outputs(self):
-        return {"data": [m["name"] for m in _hyprctl_monitors()] or ["portal-selection"]}
+        return {'data': _capture_outputs()}
+
+    def get_sync_preferences(self, area=None):
+        try:
+            from .portal import capabilities
+            prefs=preferences.from_config(load_config())
+            scenes=[]
+            bridge=load_bridge()
+            config=entertainment.pick_config(bridge,area) if bridge else None
+            if config:
+                ids=finishing.light_ids(bridge,config)
+                scenes=[{'id':s['id'],'name':(s.get('metadata') or {}).get('name','Scene')}
+                        for s in bridge.get('scene') if finishing.scene_allowed(s,ids)]
+            return {'preferences':prefs,'scenes':scenes,'portal':capabilities()}
+        except Exception as e:return {'error':str(e)}
+
+    def set_sync_preferences(self, patch):
+        try:
+            with web_sync._lock:
+                if web_sync._running:raise ValueError('Stop sync before changing capture or stop behavior')
+                options=preferences.validate(patch,preferences.from_config(load_config()))
+                def persist(cfg):
+                    cfg.update(preferences.config_patch(options))
+                    if not options['portal_remember']:cfg.pop('sync_portal_tokens',None)
+                update_config(persist)
+                return {'ok':True,'preferences':options}
+        except (ValueError,OSError,TypeError) as e:return {'error':str(e)}
 
     def get_sync_mapping(self, area, output):
         try:
@@ -502,6 +528,18 @@ class _PreviewCapture(sync.ScreenCapture):
         return colors
 
 
+def _capture_outputs():
+    outputs=[m['name'] for m in _hyprctl_monitors()]
+    try:
+        from .portal import capabilities
+        caps=capabilities()
+        if caps['types'] & 1:outputs.append('portal-selection')
+        if caps['types'] & 2:outputs.append('portal-window')
+    except Exception:
+        pass
+    return outputs
+
+
 class WebSync:
     """Screen-sync session for the web UI: runs sync.run_stream in a daemon
     thread. Owns one session at a time, including channel identification."""
@@ -518,10 +556,11 @@ class WebSync:
         self._area = None
         self._output = None
         self._processing = None
+        self._finish_result = None
 
     def _state_changed(self, state):
         with self._lock:
-            if not self._stop.is_set():
+            if not self._stop.is_set() or state == "finishing":
                 self._state = state
 
     def start(self, output, saturation, fps, config_id=None):
@@ -536,12 +575,15 @@ class WebSync:
                 options = processing.validate({"saturation": saturation}, processing.from_config(load_config()))
             except ValueError as e:
                 return {"error": str(e)}
-            available = {m["name"] for m in _hyprctl_monitors()} or {"portal-selection"}
+            try:prefs=preferences.from_config(load_config())
+            except ValueError as e:return {'error':str(e)}
+            available = set(_capture_outputs())
             if output and output not in available:
                 return {"error": "Selected monitor is unavailable"}
             self._stop.clear()
             self._state = "starting"
             self._error = None
+            self._finish_result = None
             self._fps = fps
             resolved_output = output or _default_output() or "portal-selection"
             if not resolved_output:
@@ -549,8 +591,10 @@ class WebSync:
             config_id = config_id or load_config().get("sync_area_id")
             self._area, self._output = config_id, resolved_output
             self._processing = options
-            self._source = _PreviewCapture(output=resolved_output, fps=fps, **options,
+            size=preferences.QUALITY[prefs["quality"]]
+            self._source = _PreviewCapture(output=resolved_output, fps=fps, width=size[0], height=size[1], **options,
                                            on_state=self._state_changed, cancelled=self._stop.is_set)
+            self._source.finish_preferences = prefs
             self._running = True
         self._thread = threading.Thread(target=self._run, args=(config_id,), daemon=True)
         self._thread.start()
@@ -562,11 +606,12 @@ class WebSync:
                              should_run=lambda: not self._stop.is_set())
         except Exception as e:
             with self._lock:
-                if not self._stop.is_set():
+                if not self._stop.is_set() or "cancelled" not in str(e).lower():
                     self._error = str(e)
         finally:
             with self._lock:
                 self._running = False
+                self._finish_result = self._source.finish_result if self._source else None
                 self._source = None
                 self._state = "error" if self._error else "idle"
 
@@ -582,11 +627,17 @@ class WebSync:
             time.sleep(0.1)
         return {"ok": True, "stopping": self._running}
 
-    def shutdown(self):
+    def shutdown(self, graceful=False):
+        with self._lock:
+            if self._source:self._source.finish_allowed = graceful
         self._stop.set()
         thread = self._thread
         if thread and thread is not threading.current_thread():
             thread.join(timeout=15)
+            if thread.is_alive():
+                with self._lock:
+                    if self._source:self._source.finish_allowed = False
+                print('Lumen: shutdown timed out; further finishing requests cancelled.', file=sys.stderr)
 
     def set_output(self, output):
         with self._lock:
@@ -615,7 +666,20 @@ class WebSync:
                     "revision": self._source.mapping_revision if self._source else None,
                     "frames_sent": self._source.frames_sent if self._source else 0,
                     "sampling": self._source.sampling_status if self._source else None,
-                    "processing": dict(self._source._processor.options) if self._source else self._processing}
+                    "processing": dict(self._source._processor.options) if self._source else self._processing,
+                    "finish_result": self._finish_result,
+                    "health": self._health()}
+
+    def _health(self):
+        source=self._source
+        if source is None or source._stream is None:return None
+        stream=source._stream
+        now=time.monotonic()
+        elapsed=now-source.started_at if source.started_at else 0
+        age=max(0,now-stream._frame_time) if stream._frame_time else None
+        return {'backend':stream.backend,'size':[source.width,source.height],
+                'source_size':stream.source_size,'frame_age_ms':round(age*1000) if age is not None else None,
+                'sent_fps':round((source.frames_sent-1)/elapsed,1) if elapsed>=1 else None}
 
     def identify(self, area, channel):
         with self._lock:
@@ -714,7 +778,7 @@ def _install_show_signal(window):
 
     GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, signal.SIGUSR2, raise_window)
     def quit_cleanly():
-        threading.Thread(target=window._lumen_quit, daemon=True).start()
+        threading.Thread(target=lambda: window._lumen_quit(False), daemon=True).start()
         return False
     GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM, quit_cleanly)
     GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, signal.SIGINT, quit_cleanly)
@@ -763,12 +827,12 @@ def _setup_tray(window):
         window.restore()
         _run_js(window, "window.__lumenTraySettings && window.__lumenTraySettings()")
 
-    def on_quit(icon, item):
+    def on_quit(icon, item, graceful=True):
         with quit_lock:
             if quitting.is_set():
                 return
             quitting.set()
-        web_sync.shutdown()
+        web_sync.shutdown(graceful=graceful)
         icon.stop()
         _release_single_instance()
         window.destroy()
@@ -781,7 +845,7 @@ def _setup_tray(window):
         return False  # cancel: minimize to tray instead of exiting
 
     window.events.closing += on_closing
-    window._lumen_quit = lambda: on_quit(icon, None)
+    window._lumen_quit = lambda graceful=True: on_quit(icon, None, graceful)
 
     menu = pystray.Menu(
         pystray.MenuItem("Open", off_main(on_open), default=True),

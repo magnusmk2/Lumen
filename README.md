@@ -1,6 +1,6 @@
 # Lumen
 
-This fork adds configurable screen mapping. Original project: [PierreSylla/Lumen](https://github.com/PierreSylla/Lumen). Licensed GPL-3.0-or-later.
+This fork adds configurable screen mapping, adaptive sampling and screen-sync controls. Original project: [PierreSylla/Lumen](https://github.com/PierreSylla/Lumen). Licensed GPL-3.0-or-later.
 
 Desktop control for Philips Hue lights, built for Linux/Wayland (Hyprland,
 but the UI runs anywhere `pywebview`'s GTK/WebKit backend does). Everything
@@ -42,7 +42,7 @@ Lumen averages regions of your screen and streams them to the lamps over the
 Hue Entertainment API, at up to 50 frames per second.
 
 Create an Entertainment area in the official Hue app first, then open the
-Sync page (or run `hue-sync`). The original full-height horizontal mapping remains the default. Open **Edit mapping** for a bottom-band desk-strip preset, reported-coverage or equal widths, per-device direction/order, and manual rectangles per channel. Profiles are scoped to bridge, area and monitor. Optional automatic black-bar detection makes regions follow the detected picture, with an applied-boundary preview. Response smoothing, brightness, gamma and colour boost are configurable during sync, with the same saved defaults in the CLI. See [screen mapping](docs/screen-mapping.md) for controls and limits.
+Sync page (or run `hue-sync`). The original full-height horizontal mapping remains the default. Open **Edit mapping** for a bottom-band desk-strip preset, reported-coverage or equal widths, per-device direction/order, and manual rectangles per channel. Profiles are scoped to bridge, area and monitor. Optional automatic black-bar detection makes regions follow the detected picture, with an applied-boundary preview. Response smoothing, brightness, gamma and colour boost are configurable during sync, with the same saved defaults in the CLI. Capture includes quality presets and capability-gated portal window/monitor selection. Optional ownership-checked restore or area-only scene recall runs after a graceful stop. See [screen mapping](docs/screen-mapping.md) for controls and limits.
 
 Screen capture drives a system binary rather than a Python binding, and the
 first backend that works is used:

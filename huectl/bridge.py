@@ -25,6 +25,15 @@ class Bridge:
             raise RuntimeError("; ".join(e.get("description", "") for e in errs))
         return data
 
+    def application_id(self):
+        response = requests.get(self.base + '/auth/v1', headers=self.headers,
+                                verify=False, timeout=5)
+        response.raise_for_status()
+        identity = response.headers.get('hue-application-id')
+        if not identity:
+            raise RuntimeError('Bridge did not identify this application')
+        return identity
+
     def get(self, rtype):
         return self._req("GET", f"/clip/v2/resource/{rtype}").get("data", [])
 

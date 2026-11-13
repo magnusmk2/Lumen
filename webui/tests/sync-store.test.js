@@ -102,3 +102,26 @@ test('refresh uses active processing rather than stale saved controls', async ()
   assert.deepEqual(JSON.parse(JSON.stringify(store.sync.processing)),options)
   assert.equal(store.sync.saturation,2)
 })
+
+test('capture preferences cannot change while streaming', async () => {
+  const {setSyncPreferences}=await import('../src/store/index.js')
+  store.sync.running=true
+  api.set_sync_preferences=async()=>{throw Error('should not call')}
+  assert.ok((await setSyncPreferences({quality:'detailed'})).error)
+  store.sync.running=false
+})
+test('failed preference save preserves quality and finish behavior', async () => {
+  const {setSyncPreferences}=await import('../src/store/index.js')
+  store.sync.preferences={quality:'balanced',stop_behavior:'leave',stop_scene:null,portal_remember:false}
+  api.set_sync_preferences=async()=>({error:'disk full'})
+  assert.equal((await setSyncPreferences({quality:'detailed'})).error,'disk full')
+  assert.equal(store.sync.preferences.quality,'balanced')
+})
+test('health and finish status clear instead of showing stale output', async () => {
+  const {refreshSyncStatus}=await import('../src/store/index.js')
+  api.sync_status=async()=>({running:true,state:'running',health:{backend:'wlroots',size:[64,36],frame_age_ms:4}})
+  await refreshSyncStatus();assert.equal(store.sync.health.backend,'wlroots')
+  api.sync_status=async()=>({running:false,state:'idle',finish_result:{status:'skipped',reason:'ownership'}})
+  await refreshSyncStatus();assert.equal(store.sync.health,null)
+  assert.equal(store.sync.finishResult.reason,'ownership')
+})

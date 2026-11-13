@@ -30,6 +30,10 @@ class CaptureError(RuntimeError):
     """No usable backend, or the capture command died."""
 
 
+class CaptureCancelled(CaptureError):
+    """The caller requested cancellation, rather than a failed capture."""
+
+
 class FrameStream:
     """Runs a capture command and keeps only the newest frame.
 
@@ -53,6 +57,8 @@ class FrameStream:
         self._frame_time = 0
         self.cancelled = lambda: False
         self._drainer = None
+        self.backend = None
+        self.source_size = None
 
     def start(self):
         try:
@@ -90,7 +96,7 @@ class FrameStream:
         deadline = time.monotonic() + timeout
         while True:
             if self.cancelled():
-                raise CaptureError("capture cancelled")
+                raise CaptureCancelled("capture cancelled")
             with self._lock:
                 if self._latest is not None and self._proc.poll() is None:
                     if time.monotonic() - self._frame_time > timeout:
@@ -225,6 +231,7 @@ def open_stream(name=None, output=None, fps=30,
     fast_error = None
     if spec is not None:
         stream = FrameStream(spec["cmd"], width, height, spec["bpp"]).start()
+        stream.backend = spec["backend"]
         stream.cancelled = cancelled or (lambda: False)
         try:
             stream.latest(timeout=6.0)     # prove it really produces frames

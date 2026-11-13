@@ -23,6 +23,7 @@ gi.require_version("Gio", "2.0")
 from gi.repository import Gio, GLib  # noqa: E402
 
 from . import capture
+from .config import load_config, update_config
 
 BUS = "org.freedesktop.portal.Desktop"
 PATH = "/org/freedesktop/portal/desktop"
@@ -31,10 +32,40 @@ REQUEST_IFACE = "org.freedesktop.portal.Request"
 SESSION_IFACE = "org.freedesktop.portal.Session"
 
 
+def capabilities():
+    try:
+        conn = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        reply = conn.call_sync(BUS, PATH, 'org.freedesktop.DBus.Properties', 'GetAll',
+            GLib.Variant('(s)', (SCREENCAST,)), None, Gio.DBusCallFlags.NONE, 3000, None)
+        data = reply.unpack()[0]
+        return {'types':int(data.get('AvailableSourceTypes',0)), 'version':int(data.get('version',0)),
+                'cursors':int(data.get('AvailableCursorModes',0))}
+    except GLib.Error:
+        return {'types':0, 'version':0, 'cursors':0}
+
+
+def take_restore_token(key):
+    def update(cfg):
+        tokens=cfg.setdefault('sync_portal_tokens',{})
+        token=tokens.pop(key,None)
+        return token if isinstance(token,str) and token else None
+    return update_config(update)
+
+
+def store_restore_token(key, token):
+    def update(cfg):
+        if cfg.get('sync_portal_remember',False):
+            cfg.setdefault('sync_portal_tokens',{})[key]=token
+    update_config(update)
+
+
 class PortalSession:
     """A ScreenCast session: create, select sources, start, open the remote."""
 
-    def __init__(self, timeout_ms=120000, cancelled=None):
+    def __init__(self, timeout_ms=120000, cancelled=None, source_type=1, remember=False, token_key="portal-selection"):
+        self.source_type, self.remember, self.token_key = source_type, remember, token_key
+        self.source_size = None
+        self.source_serial = None
         self.cancelled = cancelled or (lambda: False)
         self.timeout_ms = timeout_ms
         try:
@@ -43,58 +74,6 @@ class PortalSession:
             raise capture.CaptureError(f"no D-Bus session bus: {e}") from e
         self._token = uuid.uuid4().hex[:8]
         self.handle = None
-
-    def _await(self, request_path):
-        """Block until org.freedesktop.portal.Request.Response fires on
-        request_path."""
-        loop = GLib.MainLoop()
-        box = {}
-
-        def on_signal(_conn, _sender, _path, _iface, _sig, params, *_a):
-            box["code"], box["results"] = params.unpack()
-            loop.quit()
-
-        sub_id = self.conn.signal_subscribe(
-            BUS, REQUEST_IFACE, "Response", request_path, None,
-            Gio.DBusSignalFlags.NONE, on_signal)
-
-        def on_timeout():
-            loop.quit()
-            return False
-
-        timeout_id = GLib.timeout_add(self.timeout_ms, on_timeout)
-        cancelled_by_timer = []
-        def check_cancelled():
-            if self.cancelled():
-                cancelled_by_timer.append(True)
-                loop.quit()
-                return False
-            return True
-        cancel_id = GLib.timeout_add(50, check_cancelled)
-        loop.run()
-        if self.cancelled():
-            # The request may still own a picker even after the worker stops.
-            try:
-                self.conn.call_sync(BUS, request_path, REQUEST_IFACE, "Close", None,
-                                    None, Gio.DBusCallFlags.NONE, 2000, None)
-            except GLib.Error:
-                pass
-        if not cancelled_by_timer:
-            GLib.source_remove(cancel_id)
-        self.conn.signal_unsubscribe(sub_id)
-        if box:
-            GLib.source_remove(timeout_id)
-        if self.cancelled():
-            if not box:
-                GLib.source_remove(timeout_id)
-            raise capture.CaptureError("capture cancelled")
-        if not box:
-            raise capture.CaptureError("the portal did not answer in time")
-        if box["code"] != 0:            # 1 = user cancelled, 2 = failed
-            raise capture.CaptureError(
-                "screen capture was refused" if box["code"] == 1
-                else "the portal failed to start screen capture")
-        return box["results"]
 
     def _call(self, method, signature, args, reply_type):
         try:
@@ -106,15 +85,61 @@ class PortalSession:
         return reply.unpack()[0]
 
     def _request(self, method, signature, args):
-        """Call a method that returns a request object path, then await it."""
-        request_path = self._call(method, signature, args, "(o)")
-        return self._await(request_path)
+        """Subscribe before the call; use a private context per worker request.
+
+        Fast CreateSession responses can precede the method reply. Buffer by
+        returned path (including legacy portal paths), and never let the GTK
+        main context dispatch a quit before this request's loop starts.
+        """
+        context=GLib.MainContext.new()
+        context.push_thread_default()
+        loop=GLib.MainLoop.new(context,False)
+        responses={}
+        request_path=None
+        sources=[]
+        sub_id=None
+        timed_out=[]
+        def response(_conn,_sender,path,_iface,_sig,params,*_a):
+            if len(responses)<16 or path==request_path:
+                responses[path]=params.unpack()
+            if path==request_path:loop.quit()
+        try:
+            sub_id=self.conn.signal_subscribe(BUS,REQUEST_IFACE,'Response',None,None,
+                                              Gio.DBusSignalFlags.NONE,response)
+            request_path=self._call(method,signature,args,'(o)')
+            def timeout(*_a):
+                timed_out.append(True);loop.quit();return False
+            def cancel(*_a):
+                if self.cancelled():loop.quit();return False
+                return True
+            for interval,callback in [(self.timeout_ms,timeout),(50,cancel)]:
+                source=GLib.timeout_source_new(interval);source.set_callback(callback);source.attach(context)
+                sources.append(source)
+            if request_path not in responses and not self.cancelled():loop.run()
+            if self.cancelled() or timed_out:
+                try:
+                    self.conn.call_sync(BUS,request_path,REQUEST_IFACE,'Close',None,None,
+                                        Gio.DBusCallFlags.NONE,2000,None)
+                except GLib.Error:pass
+                if self.cancelled():raise capture.CaptureCancelled('capture cancelled')
+                raise capture.CaptureError('the portal did not answer in time')
+            code,result=responses[request_path]
+            if code!=0:
+                raise capture.CaptureError('screen capture was refused' if code==1 else 'the portal failed to start screen capture')
+            return result
+        finally:
+            for source in sources:source.destroy()
+            if sub_id is not None:self.conn.signal_unsubscribe(sub_id)
+            context.pop_thread_default()
 
     def _opts(self, suffix):
         return {"handle_token": GLib.Variant("s", f"{self._token}_{suffix}")}
 
     def start(self):
         """Run the handshake. Returns (node_id, pipewire_fd)."""
+        caps=capabilities()
+        if not caps['types'] & self.source_type:
+            raise capture.CaptureError('This desktop portal does not support the requested capture source')
         options = self._opts("create")
         options["session_handle_token"] = GLib.Variant("s", f"{self._token}_session")
         res = self._request("CreateSession", "(a{sv})", (options,))
@@ -122,10 +147,29 @@ class PortalSession:
 
         sel_opts = self._opts("select")
         sel_opts["multiple"] = GLib.Variant("b", False)
+        sel_opts['types'] = GLib.Variant('u', self.source_type)
+        if caps['cursors'] & 1:
+            sel_opts['cursor_mode'] = GLib.Variant('u',1)
+        if self.remember and caps['version'] >= 4:
+            sel_opts['persist_mode'] = GLib.Variant('u',2)
+            token=take_restore_token(self.token_key)
+            if token:
+                sel_opts['restore_token'] = GLib.Variant('s',token)
         self._request("SelectSources", "(oa{sv})", (self.handle, sel_opts))
 
         res = self._request("Start", "(osa{sv})", (self.handle, "", self._opts("start")))
         node_id = _node_from_streams(res.get("streams"))
+        if self.remember and caps['version'] >= 4 and res.get('restore_token'):
+            store_restore_token(self.token_key,res['restore_token'])
+        streams=res.get('streams') or []
+        if streams:
+            if self.source_type==2 and streams[0][1].get('source_type')!=2:
+                raise capture.CaptureError('The sharing picker selected a monitor or region. Open its Window tab and select a window.')
+            serial=streams[0][1].get('pipewire-serial')
+            if isinstance(serial,(str,int)) and str(serial).isdigit():self.source_serial=str(serial)
+            size=streams[0][1].get('size')
+            if size and len(size)==2 and all(type(v) is int and v>0 for v in size):
+                self.source_size=list(size)
 
         try:
             reply, fd_list = self.conn.call_with_unix_fd_list_sync(
@@ -227,14 +271,18 @@ def open_portal_stream(output=None, fps=30,
         raise capture.CaptureError(
             "gst-launch-1.0 is needed for portal capture "
             "(install gstreamer and gst-plugins-base)")
-    session = PortalSession(cancelled=cancelled)
+    window = output == 'portal-window'
+    session = PortalSession(cancelled=cancelled, source_type=2 if window else 1,
+                            remember=load_config().get('sync_portal_remember',False),
+                            token_key='portal-window' if window else 'portal-selection')
     try:
         node_id, fd = session.start()
     except Exception:
         session.close()
         raise
 
-    src = f"pipewiresrc fd={fd}" + (f" path={node_id}" if node_id else "")
+    target = f" target-object={session.source_serial}" if session.source_serial else (f" path={node_id}" if node_id else "")
+    src = f"pipewiresrc fd={fd}" + target
     cmd = ["gst-launch-1.0", "-q", *src.split(),
            "!", "videoconvert", "!", "videoscale", "!",
            f"video/x-raw,format=RGB,width={width},height={height}", "!",
@@ -243,6 +291,8 @@ def open_portal_stream(output=None, fps=30,
                            session=session, fd=fd)
     try:
         stream.cancelled = cancelled or (lambda: False)
+        stream.backend = 'portal-window' if window else 'portal-monitor'
+        stream.source_size = session.source_size
         stream.start()
         stream.latest(timeout=8.0)
         return stream

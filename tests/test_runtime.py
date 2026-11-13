@@ -17,7 +17,11 @@ class RuntimeTests(unittest.TestCase):
         cp=patch.object(config,'CONFIG_PATH',str(Path(temp.name)/'config.json'))
         cp.start();self.addCleanup(cp.stop)
         self.bridge = FakeBridge()
-        self.bridge.put = Mock()
+        def apply(kind,rid,payload):
+            if kind=='entertainment_configuration':
+                self.bridge.data[kind][0].update(status='active' if payload['action']=='start' else 'inactive',
+                    active_streamer={'rid':'test-app','rtype':'auth_v1'})
+        self.bridge.put = Mock(side_effect=apply)
         self.cfg = {'bridge_ip':'localhost','app_key':'key','client_key':'client'}
         self.load = patch.object(sync,'load_config',return_value=self.cfg)
         self.load.start();self.addCleanup(self.load.stop)

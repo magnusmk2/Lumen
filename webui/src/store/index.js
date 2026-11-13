@@ -13,6 +13,11 @@ export const store = reactive({
   sync: {
     initialized: false,
     sampling: null,
+    health: null,
+    finishResult: null,
+    preferences: {quality:'balanced',stop_behavior:'leave',stop_scene:null,portal_remember:false},
+    stopScenes: [],
+    portal: {types:0,version:0},
     areas: [],
     state: "idle",
     error: null,
@@ -272,6 +277,7 @@ export async function initSync(force = false) {
   store.sync.running = status.running
   store.sync.state = status.state || 'idle'
   store.sync.error = status.error
+  await refreshSyncPreferences()
   store.sync.initialized = true
 }
 
@@ -341,7 +347,7 @@ export async function identifySyncChannel(channel) {
 }
 export async function refreshSyncStatus() {
   const status = await syncStatus()
-  Object.assign(store.sync, { running: status.running, state: status.state || 'idle', error: status.error, sampling: status.sampling || null })
+  Object.assign(store.sync, { running: status.running, state: status.state || 'idle', error: status.error, sampling: status.sampling || null, health:status.health || null, finishResult:status.finish_result || null })
   return status
 }
 export async function chooseSyncArea(id) {
@@ -351,6 +357,32 @@ export async function chooseSyncArea(id) {
   if (!res.error) {
     store.sync.configId = id
     store.sync.channels = channels
+    await refreshSyncPreferences()
   }
   return res
+}
+
+export async function refreshSyncPreferences(){
+  const res=await api()?.get_sync_preferences?.(store.sync.configId)
+  if(!res)return {}
+  if(!res.error){
+    store.sync.preferences=res.preferences
+    store.sync.stopScenes=res.scenes || []
+    store.sync.portal=res.portal || {types:0,version:0}
+  }
+  return res
+}
+let preferencesQueue=Promise.resolve()
+export function setSyncPreferences(patch){
+  const change={...patch}
+  const operation=preferencesQueue.then(async()=>{
+    if(store.sync.running)return {error:'Stop sync before changing capture or stop behavior'}
+    try{
+      const res=await api()?.set_sync_preferences(change) ?? {error:'no_api'}
+      if(!res.error && res.preferences)store.sync.preferences=res.preferences
+      return res
+    }catch(e){return {error:String(e)}}
+  })
+  preferencesQueue=operation.catch(()=>{})
+  return operation
 }

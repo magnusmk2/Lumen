@@ -1,6 +1,6 @@
 """UI mapping operations. API calls run off the GTK main loop."""
 import threading
-from . import mapping, capture
+from . import mapping, capture, preferences
 from .bridge import load_bridge
 from .config import load_config
 
@@ -29,19 +29,19 @@ class MappingAPI:
         except (ValueError, KeyError, TypeError) as e:
             problem = str(e)
             rects, warnings = mapping.resolve(mapping.default_profile(topo), topo)
-        if output == 'portal-selection':
+        if output in ('portal-selection','portal-window'):
             warnings.append('portal_selection')
         return {'topology': topo, 'profile': profile, 'revision': revision,
                 'rectangles': rects, 'warnings': warnings, 'problem': problem,
-                'capture_size': [capture.CAPTURE_W, capture.CAPTURE_H]}
+                'capture_size': list(preferences.QUALITY[preferences.from_config(load_config())['quality']])}
 
     def preview(self, area, output, profile):
         topo = self._context(area, output)
         rects, warnings = mapping.resolve(profile, topo)
-        if output == 'portal-selection':
+        if output in ('portal-selection','portal-window'):
             warnings.append('portal_selection')
         return {'rectangles': rects, 'warnings': warnings,
-                'pixels': mapping.pixels(rects, capture.CAPTURE_W, capture.CAPTURE_H)}
+                'pixels': mapping.pixels(rects, *preferences.QUALITY[preferences.from_config(load_config())['quality']])}
 
     def save(self, area, output, profile, revision, worker):
         with self._lock:

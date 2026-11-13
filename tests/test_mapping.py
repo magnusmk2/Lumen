@@ -23,6 +23,9 @@ class FakeBridge:
             'entertainment':[{'id':'strip','owner':{'rid':'device'},'renderer_reference':{'rid':'light'},'segments':{'segments':table}}],
             'device':[{'id':'device','metadata':{'name':'Test strip'}}],
             'light':[{'id':'light','gradient':{'pixel_count':16,'points_capable':5}}]}
+    def application_id(self):
+        return 'test-app'
+
     def get(self, kind):
         return copy.deepcopy(self.data[kind])
 

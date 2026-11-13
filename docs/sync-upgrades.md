@@ -22,10 +22,14 @@
 
 Each stage is a separate reviewable change, with automated and real-app checks recorded in verification.md. Stage 1 is the upgrade authorized to start now; later stages remain planned work in this sequence. A full final-build soak and real movie comparisons are release gates for reliability/performance claims, not assumed results.
 
-## First delivery status
+## First delivery status (historical)
 
 Stage 1 implemented and installed: per-profile automatic bars, picture-relative mapping, boundary/effective-region preview and saved CLI/GUI behavior. 54 Python tests, 11 frontend tests, production build, translation parity, dependency audit and an actual 90-second capture/bridge run passed. Detection is enabled for the current saved desk profile; the user's existing 20% inset is retained. Later stages above remain planned, not implemented or claimed verified end-to-end. See verification.md for measurement scope and limits.
 
-## Second delivery status
+## Second delivery status (historical)
 
 Stage 2 implemented and installed: shared elapsed-time response, brightness/gamma and retained saturation, accessible controls in a secondary disclosure, atomic persisted parameter snapshots, processed-colour preview, and saved CLI settings/explicit overrides. 67 Python tests, 14 frontend tests, production build, 284-key parity and dependency audit pass. Native live edits, invalid-value rejection, unchanged capture process, pending-save guards and restoration of original preferences passed, with a 60-second runtime check and a 15-second final-build follow-up. Stages 3–5 remain planned. Existing colour behavior is preserved until the user changes the new controls.
+
+## Remaining implementation status
+
+Stages 3–5 are implemented. Preview uses shared source telemetry (no second preview capture), capture offers tested grid sizes and capability-gated portal source types/persistence, and graceful-stop behavior offers leave, restore and restricted scene recall with ownership/state checks. Final acceptance passed on 13 November 2026: 96 Python tests, 17 frontend tests, a 30-minute/54,003-frame installed-build soak, real window frames, native quality/restore cycles, scene-on-stop and tray-quit restoration; verification.md distinguishes fixture coverage from live frames, real light requests and the final installed-build soak. Source behavior remains conservative where the bridge/portal cannot establish ownership or capability. No claim that all hardware/compositors or simultaneous-write races are solved follows from feature completion.

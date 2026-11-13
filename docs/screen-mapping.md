@@ -114,3 +114,24 @@ The Sync page keeps colour boost visible and puts response time, brightness and 
 Defaults preserve the previous colour math exactly. Smoothing operates on processed RGB output and the live swatches show that same processed result. Starting/reopening capture, applying a mapping, or changing processing values resets history so old output does not leak into a new context. Setting the same values leaves history intact. No new subjective preset is selected for you; Reset colour controls restores the documented defaults.
 
 These settings are shared by the GUI and CLI. `hue-sync` loads saved values; `--brightness 0.8 --gamma 1.2 --response-ms 250` overrides them for one screen-sync run without changing the saved preferences. `--saturation` also remains available. The rainbow test source is unaffected by these screen-processing controls.
+
+## Capture choices and quality
+
+Screen to capture lists direct monitors plus explicit portal monitor/window choices advertised by the desktop. Starting a portal choice opens the desktop sharing picker. Select the intended source there. For window capture, open the picker’s **Window** tab and choose the application row; this Hyprland picker may initially show its Screen tab even for a window-only request. A returned monitor is rejected with a clear instruction. A window-only request is not silently changed into whole-desktop capture when the portal does not support it. Each capture choice has its own saved mapping profile; unknown portal selections use normalized geometry and the live preview adopts the returned source aspect ratio when available.
+
+Under **Capture & finishing**, choose Economy (32×18), Balanced (64×36, the existing default) or Detailed (128×72). These are sampling grids, not the native monitor resolution. More samples can improve small rectangles and border precision, with more processing work. Stop sync before changing this setting. The CLI uses the saved quality, or `--quality economy|balanced|detailed` for one run.
+
+**Remember portal selection** is optional and off by default. It requests the desktop's persistent selection mechanism where advertised; the desktop still controls consent. Restore tokens are stored only in the local private configuration, consumed once and replaced after successful selection. They are never returned to the UI. Turning remembering off discards saved tokens. If a desktop picker remains visible after cancelling or timing out, dismiss the picker itself; Lumen has already cancelled its request. The direct monitor path needs no portal token. Window and monitor tokens are separate.
+
+The live picture preview shows effective sampled regions, their channel IDs and processed colours; the editable mapping diagram stays picture-relative. Capture health shows the active backend, sampling grid, mean sent FPS and capture age. These describe sample/stream progress, not game rendering performance. They clear when the source stops or fails, so old output is not presented as live.
+
+## Lighting after stopping
+
+The default **Leave lighting as the bridge decides** preserves the previous stop behavior. Optional modes are:
+
+- **Restore captured light state:** send the affected lights' ordinary on/brightness/colour/gradient/effect state captured before activation.
+- **Apply selected scene:** recall a chosen scene after the stream is released. Only scenes whose actions affect lights entirely within this Entertainment area are offered; select a scene before enabling this mode. If none is eligible, create a zone containing only the desired sync lights, save a scene for that zone, then Refresh.
+
+Preferences are saved while sync is stopped and fixed for that session. They apply after the Stop button, explicit tray Quit, or graceful CLI Ctrl+C after at least one frame. Startup cancellation, capture/transport errors, forced signals and unconfirmed/changed ownership skip finishing requests. The app checks its identity from `/auth/v1`, the area's active streamer, ordinary light state and overlapping active areas. Changed scenes are revalidated before recall. Partial completion, skipped requests and failures are displayed separately.
+
+Restoration is best effort: Hue has no atomic compare-and-swap for these requests, another controller can act between checks, apps sharing the same Hue authorization cannot be distinguished, and an accepted bridge request does not prove an offline light physically changed. Finishing is restricted to the area and aborts remaining requests on cancellation, ownership/state changes or errors. It does not restore every kind of dynamic scene execution state. Ordinary state snapshots stay in memory for that session; credentials and tokens are never included in UI telemetry.

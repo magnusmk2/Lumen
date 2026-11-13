@@ -30,6 +30,12 @@ class BlackBarTests(unittest.TestCase):
         for bpp in (3,4):
             self.assertEqual(settle(BlackBarDetector(),frame(bpp=bpp,y=4),bpp=bpp),(0,4,64,32))
 
+    def test_quality_presets_detect_the_same_relative_bars(self):
+        for w,h,y in [(32,18,2),(64,36,4),(128,72,8)]:
+            detector=BlackBarDetector();buf=frame(w,h,bpp=4,y=y)
+            for i in range(9):crop=detector.process(buf,w,h,4,now=i*.25)
+            self.assertEqual(crop,(0,y,w,h-y))
+
     def test_pillarbox_and_combined(self):
         self.assertEqual(settle(BlackBarDetector(),frame(x=8)),(8,0,56,36))
         self.assertEqual(settle(BlackBarDetector(),frame(x=8,y=4)),(8,4,56,32))

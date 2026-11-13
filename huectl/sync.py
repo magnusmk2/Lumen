@@ -27,7 +27,7 @@ import threading
 
 from .config import load_config, stream_lock
 from .bridge import Bridge
-from . import capture, entertainment, huestream, mapping, processing
+from . import capture, entertainment, huestream, mapping, processing, preferences, finishing
 from .dtls_stream import HueDTLS
 from .blackbars import BlackBarDetector, remap_regions
 
@@ -116,9 +116,12 @@ class ScreenCapture(ColorSource):
         self._bridge = None
         self.frames_sent = 0
         self.started_at = None
+        self.finish_allowed = True
+        self.finish_result = None
+        self.finish_preferences = None
         self.regions = regions or []
         self._rectangles = None
-        self.backend = "portal" if output == "portal-selection" else backend
+        self.backend = "portal" if output in ("portal-selection", "portal-window") else backend
         self.output = output
         self.fps = fps
         self.width, self.height = width, height
@@ -257,6 +260,11 @@ def _run_stream(source, config_id=None, fps=50, should_run=None):
 
     dtls = HueDTLS(ip, app_key, client_key)
     started = False
+    graceful = False
+    failure = None
+    sent = 0
+    finish = None
+    identity = None
     period = 1.0 / max(1, fps)
     seq = 0
     try:
@@ -271,6 +279,19 @@ def _run_stream(source, config_id=None, fps=50, should_run=None):
             return
         if hasattr(source, "on_state"):
             source.on_state("starting")
+        try:
+            identity = bridge.application_id()
+        except (AttributeError, RuntimeError, OSError):
+            identity = None
+        if not identity:
+            raise RuntimeError("Cannot confirm bridge application identity before streaming")
+        if isinstance(source, ScreenCapture):
+            options = source.finish_preferences or preferences.from_config(cfg)
+            if options['stop_behavior'] != 'leave':
+                finish = finishing.FinishSession(bridge, config, options, identity)
+        latest = entertainment.pick_config(bridge, config["id"])
+        if not latest or latest.get("status") == "active":
+            raise RuntimeError("Entertainment area became unavailable during capture setup")
         entertainment.start(bridge, config["id"])
         started = True
         dtls.connect()
@@ -279,6 +300,7 @@ def _run_stream(source, config_id=None, fps=50, should_run=None):
             colors = source.sample(len(channels))
             frame = huestream.build_rgb_frame(config["id"], zip(channels, colors), seq)
             dtls.send(frame)
+            sent += 1
             if hasattr(source, "on_sent"):
                 source.on_sent()
             if seq == 0 and hasattr(source, "on_state"):
@@ -290,14 +312,51 @@ def _run_stream(source, config_id=None, fps=50, should_run=None):
                 time.sleep(delay)
             else:
                 deadline = time.monotonic()
+        graceful = True
+    except capture.CaptureCancelled as e:
+        graceful = should_run is not None and not should_run()
+        if not graceful:
+            failure = e
+            raise
+    except KeyboardInterrupt as e:
+        graceful = True
+        failure = e
+        raise
+    except BaseException as e:
+        failure = e
+        raise
     finally:
-        dtls.close()
-        source.close()
+        cleanup_errors = []
+        for close in (dtls.close, source.close):
+            try:close()
+            except Exception as e:cleanup_errors.append(str(e))
+        result = {'status':'unchanged','reason':'leave'}
         if started:
             try:
-                entertainment.stop(bridge, config["id"])
-            except Exception:
-                pass
+                current = entertainment.pick_config(bridge, config['id'])
+                owner_ok = finishing.owned(current or {},identity)
+                if not owner_ok:
+                    result = {'status':'skipped','reason':'ownership'}
+                else:
+                    unchanged = True
+                    if finish:
+                        try:unchanged = finish.before_release()
+                        except Exception as e:
+                            unchanged = False
+                            cleanup_errors.append(str(e))
+                    entertainment.stop(bridge, config['id'])
+                    if finish and graceful and sent and source.finish_allowed and not cleanup_errors:
+                        source.on_state('finishing')
+                        result = finish.apply(unchanged, allowed=lambda: source.finish_allowed)
+                    elif finish:
+                        result = {'status':'skipped','reason':'interrupted'}
+            except Exception as e:
+                cleanup_errors.append(str(e))
+        if cleanup_errors:
+            result = {'status':'error','reason':'; '.join(cleanup_errors)}
+        if isinstance(source, ScreenCapture):source.finish_result = result
+        if cleanup_errors and (failure is None or isinstance(failure,KeyboardInterrupt)):
+            raise RuntimeError('Stop cleanup failed: ' + '; '.join(cleanup_errors))
 
 
 def _list_configs():
@@ -333,6 +392,7 @@ def main():
                    help="above 1 darkens dim scenes (default 1.0)")
     p.add_argument("--brightness", type=float, help="output multiplier 0..1 (saved setting, otherwise 1)")
     p.add_argument("--response-ms", type=float, help="response time constant 0..2000 ms, 0 disables smoothing")
+    p.add_argument("--quality", choices=list(preferences.QUALITY), help="sampling quality (saved setting by default)")
     p.add_argument("--mapping", choices=["saved", "legacy", "desk"], default="saved")
     p.add_argument("--band-height", type=float, help="bottom band height in percent")
     p.add_argument("--bottom-inset", type=float, help="bottom inset in percent")
@@ -396,16 +456,19 @@ def main():
                     return 0
             elif args.show_mapping or args.mapping != "saved":
                 raise ValueError("Select a monitor with --output")
+        quality = args.quality or preferences.from_config(settings)['quality']
         if args.test:
             print("Starting test pattern - press Ctrl-C to stop.")
             source = TestColorSource()
         else:
             print("Starting screen sync - press Ctrl-C to stop.")
             source = ScreenCapture(backend=args.backend, output=args.output,
-                                   fps=args.fps, saturation=args.saturation,
+                                   fps=args.fps, width=preferences.QUALITY[quality][0], height=preferences.QUALITY[quality][1], saturation=args.saturation,
                                    gamma=args.gamma, brightness=args.brightness, response_ms=args.response_ms,
                                    mapping_profile=profile, topology=topology)
         run_stream(source, config_id=args.config, fps=args.fps)
+        if not args.test and isinstance(getattr(source,"finish_result",None),dict) and source.finish_result["status"] != "unchanged":
+            print("Stop:", source.finish_result["status"], source.finish_result["reason"])
     except KeyboardInterrupt:
         print("\nstopped.")
         return 0

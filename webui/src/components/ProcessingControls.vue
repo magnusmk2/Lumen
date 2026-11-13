@@ -12,7 +12,7 @@ const fields=[
   {key:'brightness',label:'colour_brightness',help:'colour_brightness_help',min:0,max:100,step:1,scale:100},
   {key:'gamma',label:'colour_gamma',help:'colour_gamma_help',min:.1,max:5,step:.1,scale:1},
 ]
-const unavailable=computed(()=>busy.value || props.disabled || ['starting','stopping','identifying'].includes(store.sync.state))
+const unavailable=computed(()=>busy.value || props.disabled || ['starting','stopping','finishing','identifying'].includes(store.sync.state))
 function restore(){ for(const f of fields)values[f.key]=Math.round(store.sync.processing[f.key]*f.scale*100)/100 }
 watch(()=>store.sync.processing, restore,{deep:true,immediate:true})
 async function commit(field){
